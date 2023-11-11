@@ -35,21 +35,6 @@ def stop_logging():
     logging.info('Stopping the Script')
 
 
-def housekeeping():
-    logging.info('Doing Housekeeping')
-
-    folders = ['Files/Donation', 'Files/Receipts', 'Files/Thank You Letters']
-
-    for folder in folders:
-        for i in os.listdir(folder):
-            file_path = os.path.join(folder, i)
-            try:
-                if os.path.isfile(file_path):
-                    os.unlink(file_path)
-            except Exception as e:
-                logging.error(f"Error: {e}")
-
-
 def get_env_variables():
     logging.info('Setting Environment variables')
 
@@ -247,9 +232,6 @@ try:
     # Retrieve contents from .env file
     get_env_variables()
 
-    # Housekeeping
-    housekeeping()
-
     # Connect to Server
     connect_server()
 
@@ -273,9 +255,6 @@ finally:
 
     # Close connections
     close_connection()
-
-    # Housekeeping
-    housekeeping()
 
     # Stop Logging
     stop_logging()
