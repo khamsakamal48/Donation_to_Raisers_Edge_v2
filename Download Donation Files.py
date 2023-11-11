@@ -203,15 +203,15 @@ def get_recipients(email_list):
     return value
 
 
-def connect_server(username = REMOTE_SERVER_USER, password = REMOTE_SERVER_PASS, address = REMOTE_SERVER_IP):
-    logging.info(f'Creating SSH connection with {address}')
+def connect_server():
+    logging.info(f'Creating SSH connection with {REMOTE_SERVER_IP}')
 
     global ssh, sftp
 
     # CONNECT TO SFTP
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(hostname=address, username=username, password=password)
+    ssh.connect(hostname=REMOTE_SERVER_IP, username=REMOTE_SERVER_USER, password=REMOTE_SERVER_PASS)
     sftp = ssh.open_sftp()
 
 
@@ -226,6 +226,14 @@ def download_files(remote_path, local_path):
         # Removing files
         logging.info(f'Removing files from {remote_path}')
         # sftp.remove(os.path.join(remote_path, file))
+
+
+def close_connection():
+    logging.info('Closing SSH & SFTP Connections')
+
+    # CLOSE CONNECTION
+    sftp.close()
+    ssh.close()
 
 
 try:
@@ -263,6 +271,9 @@ except Exception as Argument:
 
 finally:
 
+    # Close connections
+    close_connection()
+
     # Housekeeping
     housekeeping()
 
@@ -270,9 +281,3 @@ finally:
     stop_logging()
 
     exit()
-
-
-
-# CLOSE CONNECTION
-sftp.close()
-ssh.close()
