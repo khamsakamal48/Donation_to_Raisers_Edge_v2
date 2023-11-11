@@ -53,14 +53,13 @@ def housekeeping():
 def get_env_variables():
     logging.info('Setting Environment variables')
 
-    global REMOTE_SERVER_IP, REMOTE_SERVER_USER, REMOTE_SERVER_PASS, REMOTE_SERVER_PATH, O_CLIENT_ID, CLIENT_SECRET, TENANT_ID, FROM, SEND_TO, CC_TO, ERROR_EMAILS_TO
+    global REMOTE_SERVER_IP, REMOTE_SERVER_USER, REMOTE_SERVER_PASS, O_CLIENT_ID, CLIENT_SECRET, TENANT_ID, FROM, SEND_TO, CC_TO, ERROR_EMAILS_TO
 
     load_dotenv()
 
     REMOTE_SERVER_IP = os.getenv('REMOTE_SERVER_IP')
     REMOTE_SERVER_USER = os.getenv('REMOTE_SERVER_USER')
     REMOTE_SERVER_PASS = os.getenv('REMOTE_SERVER_PASS')
-    REMOTE_SERVER_PATH = os.getenv('REMOTE_SERVER_PATH')
     O_CLIENT_ID = os.getenv('O_CLIENT_ID')
     CLIENT_SECRET = os.getenv('CLIENT_SECRET')
     TENANT_ID = os.getenv('TENANT_ID')
@@ -247,13 +246,13 @@ try:
     connect_server()
 
     # Download Donation files
-    download_files('F:/Kamal/Donation/', 'Donation')
+    download_files('F:/FTPServer/Kamal/Donation/', 'Donation')
 
     # Download Receipts
-    download_files('F:/Kamal/Receipt/', 'Receipts')
+    download_files('F:/FTPServer/Kamal/Receipt/', 'Receipts')
 
     # Download Thank You Letters
-    download_files('F:/Kamal/ThankyouLetter/', 'Thank You Letters')
+    download_files('F:/FTPServer/Kamal/ThankyouLetter/', 'Thank You Letters')
 
 
 except Exception as Argument:
