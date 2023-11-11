@@ -38,7 +38,7 @@ def stop_logging():
 def housekeeping():
     logging.info('Doing Housekeeping')
 
-    folders = ['Donation', 'Receipts', 'Thank You Letters']
+    folders = ['Files/Donation', 'Files/Receipts', 'Files/Thank You Letters']
 
     for folder in folders:
         for i in os.listdir(folder):
@@ -267,7 +267,7 @@ except Exception as Argument:
 
     logging.error(Argument)
 
-    send_error_emails('Downloading Donation Files from Server')
+    send_error_emails('Downloading Donation Files from Server', Argument)
 
 finally:
 
