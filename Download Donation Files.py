@@ -1,7 +1,6 @@
 import os
 import paramiko
 import logging
-import glob
 import base64
 import msal
 import datetime
