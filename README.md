@@ -14,10 +14,14 @@
 ## Pre-requisites
 1. Install below packages
     ``` bash
-   pip install psycopg2
+   pip install sqlalchemy
+   pip install psycopg2-binary
    pip install paramiko
    pip install python-dotenv
    pip install msal
+   pip install pandas
+   pip install numpy
+   pip install chardet
    ```
 2. If you encounter error on installing pyscopg2, then try:
     ``` bash
@@ -31,10 +35,14 @@
    
    CREATE TABLE uploaded
     (
-        dtlDonor_id character varying
+        dtlDonor_id int
     );
    
-   
+   CREATE TABLE constituent_list
+    (
+        constituent_id int,
+        details character varying
+    );
    
    ```
 2. 
