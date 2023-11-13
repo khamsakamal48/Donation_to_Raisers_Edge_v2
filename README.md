@@ -22,6 +22,10 @@
    pip install pandas
    pip install numpy
    pip install chardet
+   pip install tensorflow
+   pip install scikit-learn
+   pip install nameparser
+   pip install phonenumbers
    ```
 2. If you encounter error on installing pyscopg2, then try:
     ``` bash
