@@ -26,6 +26,8 @@
    pip install scikit-learn
    pip install nameparser
    pip install phonenumbers
+   pip install fuzzywuzzy
+   pip install python-Levenshtein
    ```
 2. If you encounter error on installing pyscopg2, then try:
     ``` bash
@@ -34,6 +36,7 @@
 
 ## Deployment steps
 1. Setup a PostgreSQL database and load below tables
+
     ``` sql
    CREATE DATABASE "donation-to-re"
    
@@ -46,6 +49,12 @@
     (
         constituent_id int,
         details character varying
+    );
+   
+   CREATE TABLE campaign_list
+    (
+        campaign_id character varying,
+        description character varying
     );
    
    ```
