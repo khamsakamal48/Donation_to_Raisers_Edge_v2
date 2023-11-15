@@ -10,6 +10,10 @@ import glob
 import json
 import pickle
 import unicodedata
+import geopy
+import re
+import random
+import string
 
 from dotenv import load_dotenv
 from datetime import datetime
@@ -20,6 +24,11 @@ from urllib.parse import quote_plus
 from nameparser import HumanName
 from tensorflow import keras
 from sklearn.metrics import f1_score
+from sqlalchemy import text
+from fuzzywuzzy import fuzz
+from fuzzywuzzy import process
+from geopy.geocoders import Nominatim
+from geopy.extra.rate_limiter import RateLimiter
 
 
 def set_current_directory():
@@ -93,7 +102,7 @@ def send_error_emails(subject, Argument):
     if not result:
         result = app.acquire_token_for_client(scopes=scopes)
 
-        TEMPLATE = """
+        template = """
         <table style="background-color: #ffffff; border-color: #ffffff; width: auto; margin-left: auto; margin-right: auto;">
         <tbody>
         <tr style="height: 127px;">
@@ -145,7 +154,7 @@ def send_error_emails(subject, Argument):
         """
 
         # Create a text/html message from a rendered template
-        emailbody = TEMPLATE.format(
+        email_body = template.format(
             job_name=subject,
             current_time=datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
             error_log_message=Argument
@@ -165,7 +174,7 @@ def send_error_emails(subject, Argument):
                     'Subject': subject,
                     'Body': {
                         'ContentType': 'HTML',
-                        'Content': emailbody
+                        'Content': email_body
                     },
                     'ToRecipients': get_recipients(ERROR_EMAILS_TO),
                     'Attachments': [
@@ -415,7 +424,7 @@ def found_multiple_matches(df):
 
         # Create a text/html message from a rendered template
         email_body = template.format(
-            df=df
+            df=pd.DataFrame(df).T.to_html(index=False)
         )
 
         if "access_token" in result:
@@ -582,7 +591,7 @@ def inform_abt_new_record(const_id, df):
         # Create a text/html message from a rendered template
         email_body = template.format(
             url=f'https://host.nxt.blackbaud.com/constituent/records/{const_id}?envId=p-dzY8gGigKUidokeljxaQiA&svcId=renxt',
-            df=df,
+            df=pd.DataFrame(df).T.to_html(index=False),
         )
 
         if "access_token" in result:
@@ -754,9 +763,920 @@ def search_constituent(email, phone, pan):
 
 
 def upload_donation(df, const_id):
-    logging.info(f'Uploading donation for RE ID: {const_id}')
+    logging.info(f"Uploading donation for RE ID: {const_id} and Donation Portal Ref. No.: {df['dtlDonor_id']}")
+
+    # Search Campaign
+    camp_id = get_campaign(df['project'])
+
+    # Identify Gift and Receipt Date
+    date_1 = pd.to_datetime(df['transdate'])
+    date_2 = pd.to_datetime(df['depositeddate'])
+
+    if date_1 < date_2:
+        gift_date = date_1.isoformat()
+        receipt_date = date_2.isoformat()
+    else:
+        gift_date = date_2.isoformat()
+        receipt_date = date_1.isoformat()
+
+    # Get foreign currency type
+    match df['currency']:
+
+        case 'USD':
+            f_currency_type = 'Amount in US Dollars'
+
+        case 'SGD':
+            f_currency_type = 'Amount in SG Dollars'
+
+        case 'GBP':
+            f_currency_type = 'Amount in Pounds'
+
+        case 'CAD':
+            f_currency_type = 'Amount in CAD Dollars'
+
+        case _:
+            f_currency_type = ''
+
+    # Gift Parameters
+    params = {
+        'acknowledgements': {
+            'date': receipt_date,
+            'status': 'ACKNOWLEDGED'
+        },
+        'amount': {
+            'value': df['donationamount']
+        },
+        'constituent_id': const_id,
+        'date': gift_date,
+        'gift_splits': [{
+            'amount': {
+                'value': df['donationamount']
+            },
+            'campaign_id': camp_id,
+            'fund_id': 458 if df['office'] == 'ACR Office' else 457
+        }],
+        'type': 'Donation',
+        'payments': [{
+            'check_date': gift_date,
+            'check_number': df['chequeno'],
+            'payment_method': 'PersonalCheck' if df['provid'] == 'Cheque' else 'Other',
+            'reference': '' if df['provid'] == 'Cheque' else df['provid'],
+            'reference_date': gift_date
+        }],
+        'receipts': [{
+            'amount': {
+                'value': 0 if df['totalamount'] < 0 else df['totalamount']
+            },
+            'date': receipt_date,
+            'status': 'RECEIPTED'
+        }],
+        'custom_fields': [
+            {
+                'category': '' if pd.isnull(df['affilation']) else 'Affiliation',
+                'value': df['affilation'],
+                'date': '' if pd.isnull(df['affilation']) else datetime.today().date().isoformat()
+            },
+            {
+                'category': '' if pd.isnull(df['csrtype']) else 'CSR Type',
+                'value': df['csrtype'],
+                'date': '' if pd.isnull(df['csrtype']) else datetime.today().date().isoformat()
+            },
+            {
+                'category': '' if pd.isnull(df['dtlDonor_id']) else 'Donation Portal Reference No.',
+                'value': df['dtlDonor_id'],
+                'date': '' if pd.isnull(df['dtlDonor_id']) else datetime.today().date().isoformat()
+            },
+            {
+                'category': '' if pd.isnull(df['gifttype']) else 'Gift Type',
+                'value': df['gifttype'],
+                'date': '' if pd.isnull(df['gifttype']) else datetime.today().date().isoformat()
+            },
+            {
+                'category': '' if pd.isnull(df['provid']) else 'Payment Portal Method',
+                'value': df['provid'],
+                'date': '' if pd.isnull(df['provid']) else datetime.today().date().isoformat()
+            },
+            {
+                'category': '' if pd.isnull(df['paymenttype']) else 'Payment Type',
+                'value': df['paymenttype'],
+                'date': '' if pd.isnull(df['paymenttype']) else datetime.today().date().isoformat()
+            },
+            {
+                'category': f_currency_type,
+                'value': '' if f_currency_type == '' else df['currencyamount'],
+                'date': '' if f_currency_type == '' else receipt_date
+            },
+            {
+                'category': '' if pd.isnull(df['hfgrant']) else 'Grant No.',
+                'value': df['hfgrant'],
+                'date': '' if pd.isnull(df['hfgrant']) else datetime.today().date().isoformat()
+            },
+            {
+                'category': '' if pd.isnull(df['transid']) else 'Transaction ID',
+                'value': df['transid'],
+                'date': '' if pd.isnull(df['transid']) else datetime.today().date().isoformat()
+            }
+        ]
+    }
+
+    params = remove_empty_dicts(params)
+    url = 'https://api.sky.blackbaud.com/gift/v1/gifts'
+
+    post_request_re(url, params)
 
 
+def remove_empty_dicts(d):
+    logging.info('Removing blank values fro nested dictionary')
+
+    new_dict = {}
+    for k, v in d.items():
+        if isinstance(v, dict):
+            v = remove_empty_dicts(v)
+        if isinstance(v, dict) and len(v) > 0:
+            new_dict[k] = v
+        elif not isinstance(v, dict) and v != '':
+            new_dict[k] = v
+
+    return new_dict
+
+
+def get_campaign(desc):
+    logging.info('Identifying the Campaign ID')
+
+    camp_id = pd.read_sql_query(
+    f'''
+        SELECT campaign_id
+        FROM campaign_list
+        WHERE LOWER(description) = LOWER('{desc}');
+        ''',
+        db_conn
+    )
+
+    # Case-Match statement to get Campaign ID
+    match camp_id.shape[0]:
+
+        # Found only one match
+        case 1:
+            return camp_id.loc[0, 'campaign_id']
+
+        # Found no match
+        case _:
+            # Create a campaign
+            return add_campaign(desc)
+
+
+def add_campaign(desc):
+    logging.info('Adding new campaign in Raisers Edge')
+
+    camp_id = pd.read_sql_query(
+        f'''
+        SELECT MAX(campaign_id::INTEGER)
+        FROM campaign_list
+        WHERE campaign_id ~ '^[0-9]+$';
+        ''',
+        db_conn
+    )
+
+    camp_id = camp_id.loc[0, 'max'] + 1
+
+    url = 'https://api.sky.blackbaud.com/nxt-data-integration/v1/re/campaigns'
+    params = {
+        'campaign_id': camp_id,
+        'description': desc
+    }
+
+    post_request_re(url, params)
+
+    # Adding the new value to Database
+    db_conn.execute(text(f"INSERT INTO campaign_list VALUES ('{camp_id}', '{desc}');"))
+    db_conn.commit()
+
+    return camp_id
+
+
+def update_db(donation_id):
+    logging.info(f'Updating DB that the donation has been uploaded for {donation_id}')
+
+    # Adding the new value to Database
+    db_conn.execute(text(f"INSERT INTO uploaded VALUES ({donation_id});"))
+    db_conn.commit()
+
+
+def update_constituent(df, const_id):
+    logging.info(f'Updating the constituent record: {const_id} for any updates')
+
+    # Check if the donation is Online/Offline
+    match df['provid']:
+
+        # Online
+        # Update Record as these are provided by Alum
+        case 'PAYU' | 'SBIIB':
+
+            # PAN Numbers
+            # Check whether new PAN is valid
+            if is_alphanumeric(df['pancard']):
+                update_pan(df['pancard'], const_id)
+
+            # Email Address
+            if not df['email'].lower() in ['dean.acr.office@iitb.ac.in', 'dean.acr.office@gmail.com', 'donationrecipts@gmail.com',
+                                 'donationreceipts@gmail.com']:
+                update_email(df['email'], const_id)
+
+            # Address
+            update_address(df, const_id)
+
+            # Education
+            update_education(df, const_id)
+
+            # Phone Number
+            update_phones(df, const_id)
+
+            # Name
+            check_names(df, const_id)
+
+        case _:
+            # Compare only the name for Offline Donation
+            logging.info('Checking if the Donor names match with the ones in Raisers Edge')
+            check_names(df, const_id)
+
+
+def check_names(df, const_id):
+    logging.info('Checking names')
+
+    new_name = df['name']
+
+    url = f'https://api.sky.blackbaud.com/constituent/v1/constituents/{const_id}'
+    params = {}
+
+    api_response = get_request_re(url, params).json()
+
+    re_name = ' '.join(api_response['name'].split(' ')[1:])
+
+    if new_name != re_name:
+        # New name doesn't match with the ones in RE
+
+        logging.info('Sending email for different names')
+
+        authority = f'https://login.microsoftonline.com/{TENANT_ID}'
+
+        app = msal.ConfidentialClientApplication(
+            client_id=O_CLIENT_ID,
+            client_credential=CLIENT_SECRET,
+            authority=authority
+        )
+
+        scopes = ["https://graph.microsoft.com/.default"]
+
+        result = None
+        result = app.acquire_token_silent(scopes, account=None)
+
+        if not result:
+            result = app.acquire_token_for_client(scopes=scopes)
+
+            template = """
+                    <p>Hi,</p>
+                    <p>This is to inform you that the name provided by Alum is different than that exists in Raisers Edge.</p>
+                    <p>The new one has been updated in Raisers Edge, and the Existing name is stored as &#39;<u>Former Name</u>&#39; in RE.</p>
+                    <p><a href="https://host.nxt.blackbaud.com/constituent/records/{constituent_id}?envId=p-dzY8gGigKUidokeljxaQiA&amp;svcId=renxt" target="_blank"><strong>Open in RE</strong></a></p>
+                    <table align="left" border="1" cellpadding="1" cellspacing="1" style="width:500px">
+                        <thead>
+                            <tr>
+                                <th scope="col">Existing Name</th>
+                                <th scope="col">New Name</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="text-align:center">{re_name}</td>
+                                <td style="text-align:center">{new_name}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p>&nbsp;</p>
+                    <p>&nbsp;</p>
+                    <p>&nbsp;</p>
+                    <p>&nbsp;</p>
+                    <p>Thanks &amp; Regards</p>
+                    <p>A Bot.</p>
+                    """
+
+            # Create a text/html message from a rendered template
+            email_body = template.format(
+                constituent_id=const_id,
+                re_name=re_name,
+                new_name=new_name
+            )
+
+            if "access_token" in result:
+
+                endpoint = f'https://graph.microsoft.com/v1.0/users/{FROM}/sendMail'
+
+                email_msg = {
+                    'Message': {
+                        'Subject': 'Different name exists in Raisers Edge than the ones provided by Donor',
+                        'Body': {
+                            'ContentType': 'HTML',
+                            'Content': email_body
+                        },
+                        'ToRecipients': get_recipients(SEND_TO)
+                    },
+                    'SaveToSentItems': 'true'
+                }
+
+                requests.post(
+                    endpoint,
+                    headers={
+                        'Authorization': 'Bearer ' + result['access_token']
+                    },
+                    json=email_msg
+                )
+
+            else:
+                logging.info(result.get('error'))
+                logging.info(result.get('error_description'))
+                logging.info(result.get('correlation_id'))
+
+
+def update_phones(df, const_id):
+    logging.info('Proceeding to update phone')
+
+    phone = df['contactno']
+
+    if phone:
+
+        # Get Phone numbers present in RE
+        url = f'https://api.sky.blackbaud.com/constituent/v1/constituents/{const_id}/phones'
+        params = {}
+
+        api_response = get_request_re(url, params).json()
+
+        # Load to Dataframe
+        re_data = pd.json_normalize(api_response['value'])
+
+        if re_data.shape[0] != 0:
+            # Check whether it exists
+            # Remove non-numeric characters
+            re_data['number'] = re_data['number'].apply(lambda x: re.sub(r'[^0-9]', '', x))
+            new_phone = re.sub(r'[^0-9]', '', phone)
+
+            phones_in_re = re_data['number'].to_list()
+
+            # Adding last 10 characters of phone to the list as well
+            counter = len(phones_in_re)
+            i = 0
+
+            for p in phones_in_re:
+                i += 1
+                phones_in_re.append(p[-10:])
+
+                if i == counter:
+                    break
+
+            # If exists, mark as primary
+            if new_phone in phones_in_re or new_phone[-10:] in phones_in_re:
+                re_data = re_data[['id', 'number']].drop_duplicates('number').copy()
+
+                phone_id = re_data[
+                    re_data['number'].str.contains(new_phone[10:])
+                ]['id'].values[0]
+
+                url = f'https://api.sky.blackbaud.com/constituent/v1/phones/{int(phone_id)}'
+
+                params = {
+                    'primary': True,
+                    'number': phone
+                }
+
+                patch_request_re(url, params)
+
+                # Update Sync tags
+                add_tags('Sync source', 'Donation', phone, const_id)
+
+                # Update Verified Tags
+                add_tags('Verified Phone', phone, 'Donation', const_id)
+
+            # Else, add in RE
+            else:
+                params = {
+                    'constituent_id': const_id,
+                    'number': phone,
+                    'primary': True,
+                    'type': 'Mobile'
+                }
+
+                url = 'https://api.sky.blackbaud.com/constituent/v1/phones'
+
+                post_request_re(url, params)
+
+        # Else, add in RE
+        else:
+            params = {
+                'constituent_id': const_id,
+                'number': phone,
+                'primary': True,
+                'type': 'Mobile'
+            }
+
+            url = 'https://api.sky.blackbaud.com/constituent/v1/phones'
+
+            post_request_re(url, params)
+
+
+def update_education(df, const_id):
+    logging.info('Proceeding to update Education')
+
+    class_of = df['batch']
+    department = df['dept']
+    hostel = df['hostel']
+
+    if class_of != '' or department != '' or hostel != '':
+        # Get education present in RE
+        url = f'https://api.sky.blackbaud.com/constituent/v1/constituents/{const_id}/educations'
+        params = {}
+
+        api_response = get_request_re(url, params).json()
+
+        # Load to a dataframe
+        re_data = pd.json_normalize(api_response['value'])
+
+        # Check if any education data exists
+        if not re_data.empty:
+
+            re_data = re_data[re_data['school'] == 'Indian Institute of Technology Bombay'].reset_index(drop=True)
+
+            if re_data.shape[0] == 1:
+
+                education_id = int(re_data['id'][0])
+
+                try:
+                    re_class_of = int(re_data['class_of'][0])
+                except:
+                    re_class_of = class_of
+
+                # Check if existing Class of is blank or invalid
+                if class_of != '' and class_of == re_class_of:
+
+                    url = f'https://api.sky.blackbaud.com/constituent/v1/educations/{education_id}'
+
+                    params = {
+                        'class_of': class_of,
+                        'date_graduated': {
+                            'y': class_of
+                        },
+                        'date_left': {
+                            'y': class_of
+                        },
+                        'majors': [
+                            department
+                        ],
+                        'social_organization': hostel
+                    }
+
+                    # Delete blank values from JSON
+                    params = remove_empty_dicts(params)
+
+                    if params:
+                        patch_request_re(url, params)
+
+                        # Update Sync tags
+                        education = str(class_of) + ', ' + str(department) + ', ' + str(hostel)
+                        add_tags('Sync source', 'Donation',
+                                 education.replace(', , ', ', ').strip()[:50], const_id)
+
+                else:
+                    # Different Education exists
+                    send_mail_different_education(re_data, df,
+                                                  'Different education data exists in RE and the one provided by Alum',
+                                                  const_id)
+            else:
+                # Multiple education exists than what's provided
+                re_data_html = re_data.to_html(index=False, classes='table table-stripped')
+                each_row_html = df.to_html(index=False, classes='table table-stripped')
+                send_mail_different_education(re_data_html, each_row_html, 'Multiple education data exists in RE',
+                                              const_id)
+
+        else:
+            logging.info('Adding new education')
+
+            # Upload Education
+            url = 'https://api.sky.blackbaud.com/constituent/v1/educations'
+
+            params = {
+                'campus': department[:50],
+                'class_of': class_of,
+                'date_graduated': {
+                    'y': int(class_of)
+                },
+                'date_left': {
+                    'y': int(class_of)
+                },
+                'majors': [
+                    department[:50]
+                ],
+                'primary': True,
+                'school': 'Indian Institute of Technology Bombay',
+                'social_organization': hostel[:50],
+                'constituent_id': const_id
+            }
+
+            post_request_re(url, params)
+
+
+def send_mail_different_education(re_data, each_row, subject, const_id):
+
+    logging.info('Sending email for different education')
+
+    authority = f'https://login.microsoftonline.com/{TENANT_ID}'
+
+    app = msal.ConfidentialClientApplication(
+        client_id=O_CLIENT_ID,
+        client_credential=CLIENT_SECRET,
+        authority=authority
+    )
+
+    scopes = ["https://graph.microsoft.com/.default"]
+
+    result = None
+    result = app.acquire_token_silent(scopes, account=None)
+
+    if not result:
+        result = app.acquire_token_for_client(scopes=scopes)
+
+        template = """
+        <p>Hi,</p>
+        <p>This is to inform you that the Education data provided by Alum is different than that exists in Raisers Edge.</p>
+        <p><a href="https://host.nxt.blackbaud.com/constituent/records/{constituent_id}?envId=p-dzY8gGigKUidokeljxaQiA&amp;svcId=renxt" target="_blank"><strong>Open in RE</strong></a></p>
+        <p>&nbsp;</p>
+        <p>Below is the data for your comparison:</p>
+        <h3>Raisers Edge Data:</h3>
+        <p>{re_data}</p>
+        <p>&nbsp;</p>
+        <h3>Provided by Alum:</h3>
+        <p>{education_data}</p>
+        <p>&nbsp;</p>
+        <p>Thanks &amp; Regards</p>
+        <p>A Bot.</p>
+        """
+
+        # Create a text/html message from a rendered template
+        email_body = template.format(
+            constituent_id=const_id,
+            re_data=re_data.to_html(index=False),
+            education_data=pd.DataFrame(each_row).T.to_html(index=False)
+        )
+
+        if "access_token" in result:
+
+            endpoint = f'https://graph.microsoft.com/v1.0/users/{FROM}/sendMail'
+
+            email_msg = {
+                'Message': {
+                    'Subject': subject,
+                    'Body': {
+                        'ContentType': 'HTML',
+                        'Content': email_body
+                    },
+                    'ToRecipients': get_recipients(SEND_TO)
+                },
+                'SaveToSentItems': 'true'
+            }
+
+            requests.post(
+                endpoint,
+                headers={
+                    'Authorization': 'Bearer ' + result['access_token']
+                },
+                json=email_msg
+            )
+
+        else:
+            logging.info(result.get('error'))
+            logging.info(result.get('error_description'))
+            logging.info(result.get('correlation_id'))
+
+
+def update_address(df, const_id):
+    logging.info('Proceeding to update address')
+
+    new_address = ' '.join([df['address1'], df['address2'], df['city'], df['state'], df['country'], df['zipcode']])
+    new_address = new_address.replace(';', ' ').replace('\r\n', ' ').replace('\t', ' ').replace('\n', ' ').replace(
+        'nan', '').replace('  ', '').strip()
+
+    # Get addresses present in RE
+    url = f'https://api.sky.blackbaud.com/constituent/v1/constituents/{const_id}/addresses'
+    params = {}
+
+    # API request
+    api_response = get_request_re(url, params).json()
+
+    # Load to dataframe
+    address_df = pd.json_normalize(api_response['value'])
+
+    address_df['address'] = address_df[['address_lines', 'city', 'state', 'county', 'country', 'postal_code']].astype(
+        str).apply(' '.join, axis=1)
+    address_df['address'] = address_df['address'].apply(
+        lambda x: str(x).replace('\r\n', ' ').replace('\t', ' ').replace('\n', ' ').replace('nan', '').replace('  ',
+                                                                                                               ' ').strip())
+    # Drop blank addresses
+    re_address_list = [x for x in address_df['address'].to_list() if len(x) > 0]
+
+    # Check if address exists
+    if process.extractOne(new_address, re_address_list)[1] >= 90:
+        # New address exists in RE, will check if it's primary
+
+        # First let's identify the index
+        address_id = int(
+            address_df.loc[
+                re_address_list.index(process.extractOne(new_address, re_address_list)[0]),
+                ['id']
+            ]['id']
+        )
+
+        url = f'https://api.sky.blackbaud.com/constituent/v1/addresses/{address_id}'
+
+        params = {
+            'preferred': True
+        }
+
+        patch_request_re(url, params)
+
+    else:
+        # New address doesn't exist in RE
+        logging.info('Initialize Nominatim API for Geocoding')
+
+        # initialize Nominatim API
+        geolocator = Nominatim(user_agent="geoapiExercises")
+
+        # adding 1 second padding between calls
+        geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1, return_value_on_exception=None)
+
+        logging.info('Proceeding to update location')
+
+        city = df['city']
+        state = df['state']
+        country = df['country']
+
+        # Remove non-alphabetic characters
+        city = re.sub('[^a-zA-Z ]+', '', city)
+        state = re.sub('[^a-zA-Z ]+', '', state)
+        country = re.sub('[^a-zA-Z ]+', '', country)
+
+        if country != '' or ~(country == 'India' and city == '' and state == ''):
+            address = str(city) + ', ' + str(state) + ', ' + str(country)
+            address = address.replace('nan', '').strip().replace(', ,', ', ')
+
+            location = geolocator.geocode(address, addressdetails=True, language='en')
+
+            if location is None:
+                i = 0
+            else:
+                i = 1
+
+            while i == 0:
+                address_split = address[address.index(' ') + 1:]
+                address = address_split
+                location = geolocator.geocode(address_split, addressdetails=True, language='en')
+
+                if location is None:
+                    address = address_split
+                    try:
+                        if address == '':
+                            break
+                    except:
+                        break
+                    i = 0
+
+                if location is not None:
+                    break
+
+            address = location.raw['address']
+
+            try:
+                city = address.get('city', '')
+                if city == '':
+                    try:
+                        city = address.get('state_district', '')
+                        if city == '':
+                            try:
+                                city = address.get('county', '')
+                            except:
+                                city = ''
+                    except:
+                        try:
+                            city = address.get('county', '')
+                        except:
+                            city = ''
+            except:
+                try:
+                    city = address.get('state_district', '')
+                    if city == '':
+                        try:
+                            city = address.get('county', '')
+                        except:
+                            city = ''
+                except:
+                    try:
+                        city = address.get('county', '')
+                    except:
+                        city = ''
+
+            state = address.get('state', '')
+            country = address.get('country', '')
+
+            url = 'https://api.sky.blackbaud.com/constituent/v1/addresses'
+
+            # Ignore state for below countries
+            if country == 'Mauritius' or country == 'Switzerland' or country == 'France' or country == 'Bahrain':
+                state = ''
+
+            params = {
+                'city': city,
+                'state': state,
+                'county': state,
+                'country': country,
+                'constituent_id': const_id,
+                'type': 'Home',
+                'preferred': True
+            }
+
+            # Delete blank values from JSON
+            params = remove_empty_dicts(params)
+
+            try:
+                api_response = post_request_re(url, params).json()
+
+                # Update Sync tags
+                add_tags('Sync source', 'Donation', new_address, const_id)
+
+                # Update Verified Tags
+                add_tags('Verified Location', address, 'Donation', const_id)
+
+            except:
+                if 'county of value' in str(api_response).lower():
+                    add_county(state)
+                    post_request_re(url, params)
+
+                    # Update Sync tags
+                    add_tags('Sync source', 'Donation', new_address, const_id)
+
+                    # Update Verified Tags
+                    add_tags('Verified Location', new_address, 'Donation', const_id)
+
+                else:
+                    raise Exception(f'API returned an error: {api_response}')
+
+
+def add_county(county):
+    # counties = 5001
+    # States = 5049
+    i = 0
+    code_table_ids = [5001, 5049]
+
+    for code_table_id in code_table_ids:
+
+        if i == 1:
+
+            now = datetime.datetime.now()
+
+            # Generate either a 2-digit or 3-digit number randomly
+            if random.random() < 0.5:
+                unique_num = int(now.strftime('%j%H%M%S%f')[:9])
+            else:
+                unique_num = int(now.strftime('%j%H%M%S%f')[:10])
+
+            # Generate a random suffix character (either an alphabet or a special character)
+            suffix_char = random.choice(string.ascii_lowercase + string.digits + '!@#$%^&*()')
+
+            # Concatenate the unique number and the suffix character
+            short_description = str(unique_num % 1000) + suffix_char
+
+            if len(short_description) > 3:
+                short_description = short_description[1:]
+
+        else:
+            short_description = ''
+
+        url = f'https://api.sky.blackbaud.com/nxt-data-integration/v1/re/codetables/{code_table_id}/tableentries'
+
+        params = {
+            'long_description': county,
+            'short_description': short_description
+        }
+
+        # Delete blank values from JSON
+        params = remove_empty_dicts(params)
+
+        post_request_re(url, params)
+
+        i += 1
+
+
+def update_email(email, const_id):
+    logging.info('Updating email address')
+
+    # Check whether email exists in Raisers Edge
+    url = f'https://api.sky.blackbaud.com/constituent/v1/constituents/{const_id}/emailaddresses'
+    params = {}
+
+    api_response = get_request_re(url, params).json()
+
+    if email.lower() in [x['address'].lower() for x in api_response['value']]:
+        # Email exists
+        # Let's check if it's primary
+        if not [True for x in api_response['value'] if
+                (x['address'] == email and (x['primary'] == True or x['primary'] == 'True'))]:
+            email_address_id = int([x['id'] for x in api_response['value'] if x['address'] == email][0])
+
+            # Email address exists, but is not primary
+            url = f'https://api.sky.blackbaud.com/constituent/v1/emailaddresses/{email_address_id}'
+            params = {
+                'address': email.lower(),
+                'primary': True
+            }
+
+            patch_request_re(url, params)
+
+    else:
+        # Email doesn't exist
+        url = 'https://api.sky.blackbaud.com/constituent/v1/emailaddresses'
+        params = {
+            'address': email,
+            'constituent_id': const_id,
+            'primary': True,
+            'type': 'Email'
+        }
+
+        post_request_re(url, params)
+
+    # Add Sync source
+    add_tags('Sync source', 'Donation', email, const_id)
+
+    # Add Verified tag
+    add_tags('Verified Email', email, 'Donation', const_id)
+
+
+def add_tags(category, value, comment, constituent_id):
+    logging.info('Adding Tags to constituent record')
+
+    params = {
+        'category': category,
+        'comment': comment,
+        'parent_id': constituent_id,
+        'value': value,
+        'date': datetime.today().date().isoformat()
+    }
+
+    url = 'https://api.sky.blackbaud.com/constituent/v1/constituents/customfields'
+
+    post_request_re(url, params)
+
+
+def patch_request_re(url, params):
+
+    logging.info('Running PATCH Request to RE function')
+
+    # Request headers
+    headers = {
+        'Bb-Api-Subscription-Key': RE_API_KEY,
+        'Authorization': 'Bearer ' + retrieve_token(),
+        'Content-Type': 'application/json'
+    }
+
+    http.patch(url, headers=headers, data=json.dumps(params))
+
+
+def update_pan(pan, const_id):
+    logging.info('Updating PAN Numbers')
+
+    # Check whether PAN exists in RE
+    # Get Alias list
+    url = f'https://api.sky.blackbaud.com/constituent/v1/constituents/{const_id}/aliases'
+    params = {}
+
+    api_response = get_request_re(url, params).json()
+
+    if pan.lower() in [x['name'].lower() for x in api_response['value'] if x['type'] == 'Permanent Account Number']:
+        logging.info('PAN Card already exists in Raisers Edge')
+
+    else:
+        url = 'https://api.sky.blackbaud.com/constituent/v1/aliases'
+        params = {
+            'constituent_id': const_id,
+            'name': pan.upper(),
+            'type': 'Permanent Account Number'
+        }
+
+        post_request_re(url, params)
+
+
+def is_alphanumeric(s):
+    if len(s) != 10:
+        return False
+    if not s.isalnum():
+        return False
+    if s.isalpha() or s.isdigit():
+        return False
+    return True
 
 
 try:
@@ -795,16 +1715,18 @@ try:
                 logging.info(f"Proceeding to update donation with Donation Portal Reference no.: {new_donation['dtlDonor_id']}")
 
                 # Locate Donor
-                re_id = locate_donor(new_donation)
-                if re_id:
+                const_id = locate_donor(new_donation)
+
+                if const_id:
 
                     # Upload Donations
-                    upload_donation(new_donation, re_id)
-
-                    # Upload Receipts
-                    # Upload Thank You Letters
+                    upload_donation(new_donation, const_id)
 
                     # Update DB
+                    update_db(new_donation['dtlDonor_id'])
+
+                    # Update constituent
+                    update_constituent(new_donation, const_id)
 
                 break
 
