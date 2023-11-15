@@ -226,6 +226,11 @@ def get_recipients(email_list):
 
 
 def pagination_api_request(url, params):
+    logging.info('Paginating API requests')
+
+    # Housekeeping
+    housekeeping()
+
     # Pagination request to retreive list
     while url:
         # Blackbaud API GET request
@@ -342,14 +347,15 @@ def get_emails():
     email_df = load_from_JSON_to_DB()
     email_df = email_df[['constituent_id', 'address']].copy()
 
-    load_to_db(email_df)
+    load_to_db(email_df, 'constituent_list')
 
 
-def load_to_db(df, table='constituent_list'):
+def load_to_db(df, table):
     logging.info('Loading to Database')
 
-    # Renaming column name
-    df.rename(columns={df.columns[-1]: 'details'}, inplace=True)
+    if table != 'campaign_list':
+        # Renaming column name
+        df.rename(columns={df.columns[-1]: 'details'}, inplace=True)
 
     # Loading to SQL DB
     df.to_sql(table, db_conn, if_exists='append', index=False)
@@ -363,14 +369,27 @@ def get_phones():
     phone_df = load_from_JSON_to_DB()
     phone_df = phone_df[['constituent_id', 'number']].copy()
 
-    load_to_db(phone_df)
+    load_to_db(phone_df, 'constituent_list')
 
 
-def truncate_table():
+def truncate_table(table):
     logging.info('Truncating the table')
 
-    db_conn.execute(text("TRUNCATE TABLE constituent_list;"))
+    db_conn.execute(text(f"TRUNCATE TABLE {table};"))
     db_conn.commit()
+
+def get_campaign_list():
+    logging.info('Downloading Campaign list from Raisers Edge')
+
+    # Get Campaign List
+    url = 'https://api.sky.blackbaud.com/nxt-data-integration/v1/re/campaigns'
+    params = {}
+    pagination_api_request(url, params)
+
+    campaign_df = load_from_JSON_to_DB()
+    campaign_df = campaign_df[['campaign_id', 'description']].copy()
+
+    load_to_db(campaign_df, 'campaign_list')
 
 
 try:
@@ -393,24 +412,21 @@ try:
     set_api_request_strategy()
 
     # Truncate Table
-    truncate_table()
+    truncate_table('constituent_list')
 
     # Get List of Alums with Email
     get_emails()
 
-    # Housekeeping
-    housekeeping()
-
     # Get List of Alums with Phone
     get_phones()
 
-    # Housekeeping
-    housekeeping()
+    # Get Campaign List
+    get_campaign_list()
 
 except Exception as Argument:
     logging.error(Argument)
 
-    send_error_emails('Error while downloading Emails | Donation to Raisers Edge')
+    send_error_emails('Error while downloading data | Donation to Raisers Edge')
 
 finally:
 
