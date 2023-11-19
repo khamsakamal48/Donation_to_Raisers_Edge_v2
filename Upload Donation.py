@@ -10,10 +10,10 @@ import glob
 import json
 import pickle
 import unicodedata
-import geopy
 import re
 import random
 import string
+import sys
 
 from dotenv import load_dotenv
 from datetime import datetime
@@ -25,7 +25,6 @@ from nameparser import HumanName
 from tensorflow import keras
 from sklearn.metrics import f1_score
 from sqlalchemy import text
-from fuzzywuzzy import fuzz
 from fuzzywuzzy import process
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
@@ -299,6 +298,7 @@ def get_from_db(table):
     logging.info('Fetching from Database')
 
     db = pd.read_sql_query(f'SELECT * FROM {table};', db_conn)
+
     return db
 
 
@@ -306,7 +306,7 @@ def get_missing_donations():
     logging.info('Identifying pending donations')
 
     df = donation_data[
-        ~donation_data['dtlDonor_id'].isin(uploaded['dtldonor_id'])
+        ~(donation_data['dtlDonor_id'].astype(int).isin(uploaded['dtldonor_id'].astype(int)))
     ].reset_index(drop=True)
 
     return df
@@ -379,7 +379,7 @@ def locate_donor(df):
                     return found_multiple_matches(df)
 
         case _:
-            print('Found multiple matches')
+            logging.info('Found multiple matches')
             return found_multiple_matches(df)
 
 
@@ -400,6 +400,9 @@ def found_multiple_matches(df):
     result = app.acquire_token_silent(scopes, account=None)
 
     if not result:
+
+        result = app.acquire_token_for_client(scopes=scopes)
+
         template = '''
         <p style="text-align: justify;">Hi,</p>
         <p style="text-align: justify;">This is to inform you that for the below donor, I could find multiple matches in Raisers Edge. Hence, it could be that these are duplicate records, or else that either the same email, phone number, or PAN card number exists across one or more records.</p>
@@ -424,7 +427,7 @@ def found_multiple_matches(df):
 
         # Create a text/html message from a rendered template
         email_body = template.format(
-            df=pd.DataFrame(df).T.to_html(index=False)
+            df=pd.DataFrame(df).fillna('').T.to_html(index=False)
         )
 
         if "access_token" in result:
@@ -467,7 +470,7 @@ def create_constituent(df):
     company_name = df['companyname']
     name = df['name']
 
-    if pd.isnull(company_name) | affiliation != 'Foundation':
+    if pd.isnull(company_name) or affiliation != 'Foundation' or affiliation != 'Corporate Non CSR':
         # Individual
         name = name.replace('\r\n', ' ').replace('\t', ' ').replace('\n', ' ').replace('  ', ' ')
 
@@ -485,10 +488,16 @@ def create_constituent(df):
         if not last_name:
             last_name = '.'
 
-        title = str(name.title).title()
-
         # Get Gender
         gender = get_gender(first_name)
+
+        title = str(name.title).title()
+        if not title:
+            match gender:
+                case 'Male':
+                    title = 'Mr.'
+                case 'Female':
+                    title = 'Ms.'
 
         # Parameters
         params = {
@@ -557,6 +566,8 @@ def inform_abt_new_record(const_id, df):
     result = app.acquire_token_silent(scopes, account=None)
 
     if not result:
+        result = app.acquire_token_for_client(scopes=scopes)
+
         template = '''
         <p style="text-align: justify;">Hi,</p>
         <p style="text-align: justify;">This is to inform you that a new record was created in Raisers Edge to add the donations for which we couldn't find any existing donors.</p>
@@ -567,7 +578,7 @@ def inform_abt_new_record(const_id, df):
         <tbody>
         <tr style="height: 54px;">
         <th style="width: 100%; border-style: double; height: 54px; background-color: #ff9966; text-align: center; vertical-align: middle;">
-        <h2><a href="{url}" target="_blank"><span style="color: #ffffff;">Open in RE</span></a></h2>
+        <h2><a href="https://host.nxt.blackbaud.com/constituent/records/{const_id}?envId=p-dzY8gGigKUidokeljxaQiA&svcId=renxt" target="_blank"><span style="color: #ffffff;">Open in RE</span></a></h2>
         </th>
         </tr>
         <tr style="height: 18px;">
@@ -590,8 +601,8 @@ def inform_abt_new_record(const_id, df):
 
         # Create a text/html message from a rendered template
         email_body = template.format(
-            url=f'https://host.nxt.blackbaud.com/constituent/records/{const_id}?envId=p-dzY8gGigKUidokeljxaQiA&svcId=renxt',
-            df=pd.DataFrame(df).T.to_html(index=False),
+            const_id=const_id,
+            df=pd.DataFrame(df).fillna('').T.to_html(index=False)
         )
 
         if "access_token" in result:
@@ -632,11 +643,31 @@ def post_request_re(url, params):
         'Bb-Api-Subscription-Key': RE_API_KEY,
         'Authorization': 'Bearer ' + retrieve_token(),
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache'
     }
 
-    re_api_response = http.post(url, params=params, headers=headers, json=params).json()
+    # Convert int64 to int in params
+    params = {k: int(v) if isinstance(v, np.int64) else v for k, v in params.items()}
 
-    return re_api_response
+    logging.debug(params)
+
+    try:
+        re_api_response = http.post(url, params=params, headers=headers, json=params)
+        re_api_response.raise_for_status()  # Raises a HTTPError if the status is 4xx, 5xx
+
+    except requests.exceptions.HTTPError as http_err:
+        logging.error(f"HTTP error occurred: {http_err}")
+        raise Exception("The POST request was not successful.")
+
+    except requests.exceptions.RequestException as err:
+        logging.error(f"Request error occurred: {err}")
+        raise Exception("An error occurred during the POST request.")
+
+    except Exception as e:
+        logging.error(f"An error occurred: {e}")
+        raise Exception
+    else:
+        return re_api_response.json()
 
 
 def get_gender(name):
@@ -691,7 +722,7 @@ def set_flag(i):
              'z'}
     len_vocab = len(vocab)
 
-    aux = np.zeros(len_vocab);
+    aux = np.zeros(len_vocab)
     aux[i] = 1
     return list(aux)
 
@@ -799,10 +830,13 @@ def upload_donation(df, const_id):
 
     # Gift Parameters
     params = {
-        'acknowledgements': {
-            'date': receipt_date,
-            'status': 'ACKNOWLEDGED'
-        },
+        'acknowledgements': [
+            {
+                'date': receipt_date,
+                'status': 'ACKNOWLEDGED',
+                'letter': 'General Thank You'
+            }
+        ],
         'amount': {
             'value': df['donationamount']
         },
@@ -812,16 +846,24 @@ def upload_donation(df, const_id):
             'amount': {
                 'value': df['donationamount']
             },
-            'campaign_id': camp_id,
-            'fund_id': 458 if df['office'] == 'ACR Office' else 457
+            'campaign_id': int(camp_id),
+            'fund_id': 457 if df['office'] == 'HF' else 458
         }],
         'type': 'Donation',
         'payments': [{
-            'check_date': gift_date,
-            'check_number': df['chequeno'],
+            'check_date': {
+                'd': pd.to_datetime(gift_date).strftime('%d') if df['provid'] == 'Cheque' else '',
+                'm': pd.to_datetime(gift_date).strftime('%m') if df['provid'] == 'Cheque' else '',
+                'y': pd.to_datetime(gift_date).strftime('%Y') if df['provid'] == 'Cheque' else ''
+            },
+            'check_number': '' if pd.isnull(df['chequeno']) else df['chequeno'],
             'payment_method': 'PersonalCheck' if df['provid'] == 'Cheque' else 'Other',
             'reference': '' if df['provid'] == 'Cheque' else df['provid'],
-            'reference_date': gift_date
+            'reference_date': {
+                'd': pd.to_datetime(gift_date).strftime('%d'),
+                'm': pd.to_datetime(gift_date).strftime('%m'),
+                'y': pd.to_datetime(gift_date).strftime('%Y')
+            }
         }],
         'receipts': [{
             'amount': {
@@ -833,33 +875,33 @@ def upload_donation(df, const_id):
         'custom_fields': [
             {
                 'category': '' if pd.isnull(df['affilation']) else 'Affiliation',
-                'value': df['affilation'],
-                'date': '' if pd.isnull(df['affilation']) else datetime.today().date().isoformat()
+                'value': '' if pd.isnull(df['affilation']) else df['affilation'],
+                'date': '' if pd.isnull(df['affilation']) else datetime.today().strftime('%Y-%m-%dT%H:%M:%S')
             },
             {
                 'category': '' if pd.isnull(df['csrtype']) else 'CSR Type',
-                'value': df['csrtype'],
-                'date': '' if pd.isnull(df['csrtype']) else datetime.today().date().isoformat()
+                'value': '' if pd.isnull(df['csrtype']) else df['csrtype'],
+                'date': '' if pd.isnull(df['csrtype']) else datetime.today().strftime('%Y-%m-%dT%H:%M:%S')
             },
             {
                 'category': '' if pd.isnull(df['dtlDonor_id']) else 'Donation Portal Reference No.',
-                'value': df['dtlDonor_id'],
-                'date': '' if pd.isnull(df['dtlDonor_id']) else datetime.today().date().isoformat()
+                'value': '' if pd.isnull(df['dtlDonor_id']) else df['dtlDonor_id'],
+                'date': '' if pd.isnull(df['dtlDonor_id']) else datetime.today().strftime('%Y-%m-%dT%H:%M:%S')
             },
             {
                 'category': '' if pd.isnull(df['gifttype']) else 'Gift Type',
-                'value': df['gifttype'],
-                'date': '' if pd.isnull(df['gifttype']) else datetime.today().date().isoformat()
+                'value': '' if pd.isnull(df['gifttype']) else df['gifttype'],
+                'date': '' if pd.isnull(df['gifttype']) else datetime.today().strftime('%Y-%m-%dT%H:%M:%S')
             },
             {
                 'category': '' if pd.isnull(df['provid']) else 'Payment Portal Method',
-                'value': df['provid'],
-                'date': '' if pd.isnull(df['provid']) else datetime.today().date().isoformat()
+                'value': '' if pd.isnull(df['provid']) else df['provid'],
+                'date': '' if pd.isnull(df['provid']) else datetime.today().strftime('%Y-%m-%dT%H:%M:%S')
             },
             {
                 'category': '' if pd.isnull(df['paymenttype']) else 'Payment Type',
-                'value': df['paymenttype'],
-                'date': '' if pd.isnull(df['paymenttype']) else datetime.today().date().isoformat()
+                'value': '' if pd.isnull(df['paymenttype']) else df['paymenttype'],
+                'date': '' if pd.isnull(df['paymenttype']) else datetime.today().strftime('%Y-%m-%dT%H:%M:%S')
             },
             {
                 'category': f_currency_type,
@@ -868,56 +910,58 @@ def upload_donation(df, const_id):
             },
             {
                 'category': '' if pd.isnull(df['hfgrant']) else 'Grant No.',
-                'value': df['hfgrant'],
-                'date': '' if pd.isnull(df['hfgrant']) else datetime.today().date().isoformat()
+                'value': '' if pd.isnull(df['hfgrant']) else df['hfgrant'],
+                'date': '' if pd.isnull(df['hfgrant']) else datetime.today().strftime('%Y-%m-%dT%H:%M:%S')
             },
             {
                 'category': '' if pd.isnull(df['transid']) else 'Transaction ID',
-                'value': df['transid'],
-                'date': '' if pd.isnull(df['transid']) else datetime.today().date().isoformat()
+                'value': '' if pd.isnull(df['transid']) else df['transid'],
+                'date': '' if pd.isnull(df['transid']) else datetime.today().strftime('%Y-%m-%dT%H:%M:%S')
+            },
+            {
+                'category': '' if pd.isnull(df['sapreferenceno']) else 'SAP Document No.',
+                'value': '' if pd.isnull(df['sapreferenceno']) else df['sapreferenceno'],
+                'date': '' if pd.isnull(df['sapreferenceno']) else datetime.today().strftime('%Y-%m-%dT%H:%M:%S')
             }
         ]
     }
 
-    params = remove_empty_dicts(params)
+    logging.info('Proceeding to upload donations')
+    params = delete_empty_keys(params)
+
     url = 'https://api.sky.blackbaud.com/gift/v1/gifts'
 
     post_request_re(url, params)
 
 
-def remove_empty_dicts(d):
-    logging.info('Removing blank values fro nested dictionary')
-
+def delete_empty_keys(dictionary):
     new_dict = {}
-    for k, v in d.items():
-        if isinstance(v, dict):
-            v = remove_empty_dicts(v)
-        if isinstance(v, dict) and len(v) > 0:
+    for k, v in dictionary.items():
+        if isinstance(v, dict):  # If value is a dictionary, recurse
+            v = delete_empty_keys(v)
+        elif isinstance(v, list):  # If value is a list, iterate over each element
+            v = [delete_empty_keys(item) if isinstance(item, dict) else item for item in v]
+            v = [item for item in v if item]  # Remove empty items from the list
+        if v:  # If the value is not empty, add it to the new dictionary
             new_dict[k] = v
-        elif not isinstance(v, dict) and v != '':
-            new_dict[k] = v
-
     return new_dict
 
 
 def get_campaign(desc):
     logging.info('Identifying the Campaign ID')
 
-    camp_id = pd.read_sql_query(
-    f'''
-        SELECT campaign_id
+    camp_id = pd.read_sql_query(f"""
+    SELECT id
         FROM campaign_list
         WHERE LOWER(description) = LOWER('{desc}');
-        ''',
-        db_conn
-    )
+    """, db_conn)
 
     # Case-Match statement to get Campaign ID
     match camp_id.shape[0]:
 
         # Found only one match
         case 1:
-            return camp_id.loc[0, 'campaign_id']
+            return camp_id.loc[0, 'id']
 
         # Found no match
         case _:
@@ -945,20 +989,20 @@ def add_campaign(desc):
         'description': desc
     }
 
-    post_request_re(url, params)
+    response = post_request_re(url, params)
 
     # Adding the new value to Database
-    db_conn.execute(text(f"INSERT INTO campaign_list VALUES ('{camp_id}', '{desc}');"))
+    db_conn.execute(text(f"INSERT INTO campaign_list VALUES ('{camp_id}', '{desc}', '{response['id']}');"))
     db_conn.commit()
 
-    return camp_id
+    return response['id']
 
 
 def update_db(donation_id):
     logging.info(f'Updating DB that the donation has been uploaded for {donation_id}')
 
     # Adding the new value to Database
-    db_conn.execute(text(f"INSERT INTO uploaded VALUES ({donation_id});"))
+    db_conn.execute(text(f"INSERT INTO uploaded VALUES ({donation_id}, now());"))
     db_conn.commit()
 
 
@@ -1008,11 +1052,14 @@ def check_names(df, const_id):
     url = f'https://api.sky.blackbaud.com/constituent/v1/constituents/{const_id}'
     params = {}
 
-    api_response = get_request_re(url, params).json()
+    api_response = get_request_re(url, params)
 
-    re_name = ' '.join(api_response['name'].split(' ')[1:])
+    if api_response['name'].split(' ')[-1].isdigit():
+        re_name = ' '.join(api_response['name'].split(' ')[:-1])
+    else:
+        re_name = api_response['name']
 
-    if new_name != re_name:
+    if new_name.strip().lower() != re_name.strip().lower():
         # New name doesn't match with the ones in RE
 
         logging.info('Sending email for different names')
@@ -1108,7 +1155,7 @@ def update_phones(df, const_id):
         url = f'https://api.sky.blackbaud.com/constituent/v1/constituents/{const_id}/phones'
         params = {}
 
-        api_response = get_request_re(url, params).json()
+        api_response = get_request_re(url, params)
 
         # Load to Dataframe
         re_data = pd.json_normalize(api_response['value'])
@@ -1194,7 +1241,7 @@ def update_education(df, const_id):
         url = f'https://api.sky.blackbaud.com/constituent/v1/constituents/{const_id}/educations'
         params = {}
 
-        api_response = get_request_re(url, params).json()
+        api_response = get_request_re(url, params)
 
         # Load to a dataframe
         re_data = pd.json_normalize(api_response['value'])
@@ -1233,7 +1280,7 @@ def update_education(df, const_id):
                     }
 
                     # Delete blank values from JSON
-                    params = remove_empty_dicts(params)
+                    params = delete_empty_keys(params)
 
                     if params:
                         patch_request_re(url, params)
@@ -1322,7 +1369,7 @@ def send_mail_different_education(re_data, each_row, subject, const_id):
         email_body = template.format(
             constituent_id=const_id,
             re_data=re_data.to_html(index=False),
-            education_data=pd.DataFrame(each_row).T.to_html(index=False)
+            education_data=pd.DataFrame(each_row).fillna('').T.to_html(index=False)
         )
 
         if "access_token" in result:
@@ -1358,30 +1405,32 @@ def send_mail_different_education(re_data, each_row, subject, const_id):
 def update_address(df, const_id):
     logging.info('Proceeding to update address')
 
-    new_address = ' '.join([df['address1'], df['address2'], df['city'], df['state'], df['country'], df['zipcode']])
+    new_address = str(df['address1']) + ' ' + str(df['address2']) + ' ' + str(df['city']) + ' ' + str(df['state']) + ' ' + str(df['country']) + ' ' + str(df['zipcode'])
+    logging.debug(new_address)
     new_address = new_address.replace(';', ' ').replace('\r\n', ' ').replace('\t', ' ').replace('\n', ' ').replace(
-        'nan', '').replace('  ', '').strip()
+        'nan', ' ').replace('  ', ' ').strip()
+    logging.debug(new_address)
 
     # Get addresses present in RE
     url = f'https://api.sky.blackbaud.com/constituent/v1/constituents/{const_id}/addresses'
     params = {}
 
     # API request
-    api_response = get_request_re(url, params).json()
+    api_response = get_request_re(url, params)
 
     # Load to dataframe
     address_df = pd.json_normalize(api_response['value'])
 
-    address_df['address'] = address_df[['address_lines', 'city', 'state', 'county', 'country', 'postal_code']].astype(
-        str).apply(' '.join, axis=1)
-    address_df['address'] = address_df['address'].apply(
-        lambda x: str(x).replace('\r\n', ' ').replace('\t', ' ').replace('\n', ' ').replace('nan', '').replace('  ',
-                                                                                                               ' ').strip())
+    # address_df['address'] = address_df[['address_lines', 'city', 'state', 'county', 'country', 'postal_code']].astype(
+    #     str).apply(' '.join, axis=1)
+    address_df['address'] = address_df['formatted_address'].apply(
+        lambda x: str(x).replace('\r\n', ' ').replace('\t', ' ').replace('\n', ' ').replace('nan', ' ').replace('  ', ' ').strip())
+
     # Drop blank addresses
-    re_address_list = [x for x in address_df['address'].to_list() if len(x) > 0]
+    re_address_list = address_df['address'].dropna().to_list()
 
     # Check if address exists
-    if process.extractOne(new_address, re_address_list)[1] >= 90:
+    if process.extractOne(new_address, re_address_list)[1] >= 95:
         # New address exists in RE, will check if it's primary
 
         # First let's identify the index
@@ -1400,6 +1449,12 @@ def update_address(df, const_id):
 
         patch_request_re(url, params)
 
+        # Update Sync tags
+        add_tags('Sync source', 'Donation', new_address[:50], const_id)
+
+        # Update Verified Tags
+        add_tags('Verified Location', new_address[:50], 'Donation', const_id)
+
     else:
         # New address doesn't exist in RE
         logging.info('Initialize Nominatim API for Geocoding')
@@ -1412,9 +1467,10 @@ def update_address(df, const_id):
 
         logging.info('Proceeding to update location')
 
-        city = df['city']
-        state = df['state']
-        country = df['country']
+        address_lines = ' ' if pd.isnull(df['address1']) else str(df['address1']) + ' ' + ' ' if pd.isnull(df['address2']) else str(df['address2'])
+        city = ' ' if pd.isnull(df['city']) else str(df['city'])
+        state = ' ' if pd.isnull(df['state']) else str(df['state'])
+        country = ' ' if pd.isnull(df['country']) else str(df['country'])
 
         # Remove non-alphabetic characters
         city = re.sub('[^a-zA-Z ]+', '', city)
@@ -1422,32 +1478,19 @@ def update_address(df, const_id):
         country = re.sub('[^a-zA-Z ]+', '', country)
 
         if country != '' or ~(country == 'India' and city == '' and state == ''):
-            address = str(city) + ', ' + str(state) + ', ' + str(country)
+            address = str(address_lines) + ', ' + str(city) + ', ' + str(state) + ', ' + str(country)
+
             address = address.replace('nan', '').strip().replace(', ,', ', ')
 
             location = geolocator.geocode(address, addressdetails=True, language='en')
 
-            if location is None:
-                i = 0
-            else:
-                i = 1
+            while not location:
+                print('I am here')
 
-            while i == 0:
                 address_split = address[address.index(' ') + 1:]
                 address = address_split
+
                 location = geolocator.geocode(address_split, addressdetails=True, language='en')
-
-                if location is None:
-                    address = address_split
-                    try:
-                        if address == '':
-                            break
-                    except:
-                        break
-                    i = 0
-
-                if location is not None:
-                    break
 
             address = location.raw['address']
 
@@ -1490,26 +1533,28 @@ def update_address(df, const_id):
                 state = ''
 
             params = {
+                'address_lines': new_address.replace('  ', ' ').strip(),
                 'city': city,
                 'state': state,
                 'county': state,
                 'country': country,
+                'postal_code': '' if pd.isnull(df['zipcode']) else int(df['zipcode']) if str(df['zipcode']).isdigit() else df['zipcode'],
                 'constituent_id': const_id,
                 'type': 'Home',
                 'preferred': True
             }
 
             # Delete blank values from JSON
-            params = remove_empty_dicts(params)
+            params = delete_empty_keys(params)
 
             try:
-                api_response = post_request_re(url, params).json()
+                api_response = post_request_re(url, params)
 
                 # Update Sync tags
-                add_tags('Sync source', 'Donation', new_address, const_id)
+                add_tags('Sync source', 'Donation', new_address[:50], const_id)
 
                 # Update Verified Tags
-                add_tags('Verified Location', address, 'Donation', const_id)
+                add_tags('Verified Location', new_address[:50], 'Donation', const_id)
 
             except:
                 if 'county of value' in str(api_response).lower():
@@ -1517,10 +1562,10 @@ def update_address(df, const_id):
                     post_request_re(url, params)
 
                     # Update Sync tags
-                    add_tags('Sync source', 'Donation', new_address, const_id)
+                    add_tags('Sync source', 'Donation', new_address[:50], const_id)
 
                     # Update Verified Tags
-                    add_tags('Verified Location', new_address, 'Donation', const_id)
+                    add_tags('Verified Location', new_address[:50], 'Donation', const_id)
 
                 else:
                     raise Exception(f'API returned an error: {api_response}')
@@ -1564,7 +1609,7 @@ def add_county(county):
         }
 
         # Delete blank values from JSON
-        params = remove_empty_dicts(params)
+        params = delete_empty_keys(params)
 
         post_request_re(url, params)
 
@@ -1578,14 +1623,14 @@ def update_email(email, const_id):
     url = f'https://api.sky.blackbaud.com/constituent/v1/constituents/{const_id}/emailaddresses'
     params = {}
 
-    api_response = get_request_re(url, params).json()
+    api_response = get_request_re(url, params)
 
     if email.lower() in [x['address'].lower() for x in api_response['value']]:
         # Email exists
         # Let's check if it's primary
         if not [True for x in api_response['value'] if
-                (x['address'] == email and (x['primary'] == True or x['primary'] == 'True'))]:
-            email_address_id = int([x['id'] for x in api_response['value'] if x['address'] == email][0])
+                (x['address'] == email.lower() and (x['primary'] == True or x['primary'] == 'True'))]:
+            email_address_id = int([x['id'] for x in api_response['value'] if x['address'] == email.lower()][0])
 
             # Email address exists, but is not primary
             url = f'https://api.sky.blackbaud.com/constituent/v1/emailaddresses/{email_address_id}'
@@ -1653,7 +1698,7 @@ def update_pan(pan, const_id):
     url = f'https://api.sky.blackbaud.com/constituent/v1/constituents/{const_id}/aliases'
     params = {}
 
-    api_response = get_request_re(url, params).json()
+    api_response = get_request_re(url, params)
 
     if pan.lower() in [x['name'].lower() for x in api_response['value'] if x['type'] == 'Permanent Account Number']:
         logging.info('PAN Card already exists in Raisers Edge')
@@ -1701,6 +1746,7 @@ try:
         # Identify missing donations
         logging.info('Identifying pending donations')
         uploaded = get_from_db('uploaded').copy()
+
         new_donations = get_missing_donations().copy()
 
         # Upload Missing Data
@@ -1710,23 +1756,24 @@ try:
             set_api_request_strategy()
 
             # Looping over each row in Dataframe
-            for index, new_donation in new_donations.sample().iterrows():
+            for index, new_donation in new_donations.iterrows():
+            # for index, new_donation in new_donations.sample().iterrows():
 
                 logging.info(f"Proceeding to update donation with Donation Portal Reference no.: {new_donation['dtlDonor_id']}")
 
                 # Locate Donor
-                const_id = locate_donor(new_donation)
+                re_id = locate_donor(new_donation)
 
-                if const_id:
+                if re_id:
 
                     # Upload Donations
-                    upload_donation(new_donation, const_id)
+                    upload_donation(new_donation, re_id)
 
                     # Update DB
                     update_db(new_donation['dtlDonor_id'])
 
                     # Update constituent
-                    update_constituent(new_donation, const_id)
+                    update_constituent(new_donation, re_id)
 
                 break
 
@@ -1744,4 +1791,7 @@ finally:
     # # Housekeeping of donation files
     # housekeeping()
 
-    exit()
+    # Stop Logging
+    stop_logging()
+
+    sys.exit()
