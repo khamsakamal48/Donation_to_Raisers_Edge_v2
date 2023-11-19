@@ -42,7 +42,8 @@
    
    CREATE TABLE uploaded
     (
-        dtlDonor_id int
+        dtlDonor_id int,
+        date_uploaded date
     );
    
    CREATE TABLE constituent_list
@@ -54,8 +55,8 @@
    CREATE TABLE campaign_list
     (
         campaign_id character varying,
-        description character varying
+        description character varying,
+        id int
     );
    
    ```
-2. 
