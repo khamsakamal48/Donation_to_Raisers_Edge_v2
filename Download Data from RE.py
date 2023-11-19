@@ -353,6 +353,10 @@ def get_emails():
 def load_to_db(df, table):
     logging.info('Loading to Database')
 
+    if table == 'campaign_list':
+        # Truncate Table
+        truncate_table(table)
+
     if table != 'campaign_list':
         # Renaming column name
         df.rename(columns={df.columns[-1]: 'details'}, inplace=True)
@@ -382,12 +386,12 @@ def get_campaign_list():
     logging.info('Downloading Campaign list from Raisers Edge')
 
     # Get Campaign List
-    url = 'https://api.sky.blackbaud.com/nxt-data-integration/v1/re/campaigns'
+    url = 'https://api.sky.blackbaud.com/nxt-data-integration/v1/re/campaigns?limit=5000'
     params = {}
     pagination_api_request(url, params)
 
     campaign_df = load_from_JSON_to_DB()
-    campaign_df = campaign_df[['campaign_id', 'description']].copy()
+    campaign_df = campaign_df[['campaign_id', 'description', 'id']].copy()
 
     load_to_db(campaign_df, 'campaign_list')
 
@@ -408,11 +412,11 @@ try:
     # Connect to DataBase
     db_conn = connect_db()
 
-    # Set API Request strategy
-    set_api_request_strategy()
-
     # Truncate Table
     truncate_table('constituent_list')
+
+    # Set API Request strategy
+    set_api_request_strategy()
 
     # Get List of Alums with Email
     get_emails()
@@ -426,7 +430,7 @@ try:
 except Exception as Argument:
     logging.error(Argument)
 
-    send_error_emails('Error while downloading data | Donation to Raisers Edge')
+    send_error_emails('Error while downloading data | Donation to Raisers Edge', Argument)
 
 finally:
 
