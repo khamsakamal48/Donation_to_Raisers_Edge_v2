@@ -1756,8 +1756,7 @@ try:
             set_api_request_strategy()
 
             # Looping over each row in Dataframe
-            for index, new_donation in new_donations.iterrows():
-            # for index, new_donation in new_donations.sample().iterrows():
+            for index, new_donation in new_donations.sample().iterrows():
 
                 logging.info(f"Proceeding to update donation with Donation Portal Reference no.: {new_donation['dtlDonor_id']}")
 
