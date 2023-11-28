@@ -28,6 +28,7 @@
    pip install phonenumbers
    pip install fuzzywuzzy
    pip install python-Levenshtein
+   pip install geopy
    ```
 2. If you encounter error on installing pyscopg2, then try:
     ``` bash
