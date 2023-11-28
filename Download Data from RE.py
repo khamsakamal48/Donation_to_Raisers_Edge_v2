@@ -324,7 +324,7 @@ def connect_db():
     logging.info('Connecting to Database')
 
     # Create an engine instance
-    alchemyEngine = create_engine('postgresql+psycopg2://kamal:kamal%401991@192.168.1.96:5432/donation-to-re',
+    alchemyEngine = create_engine(f'postgresql+psycopg2://{DB_USERNAME}:{DB_PASSWORD}@{DB_IP}:5432/{DB_NAME}',
                                   pool_recycle=3600)
 
     # Connect to PostgreSQL server
@@ -336,7 +336,8 @@ def connect_db():
 def disconnect_db():
     logging.info('Disconnecting from Database')
 
-    db_conn.close()
+    if db_conn:
+        db_conn.close()
 
 
 def get_emails():
