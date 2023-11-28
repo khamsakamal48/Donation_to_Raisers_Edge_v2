@@ -16,6 +16,7 @@ from requests.adapters import HTTPAdapter
 from urllib3 import Retry
 from sqlalchemy import create_engine
 from sqlalchemy import text
+from urllib.parse import quote_plus
 
 
 def set_current_directory():
@@ -63,7 +64,7 @@ def get_env_variables():
     DB_IP = os.getenv("DB_IP")
     DB_NAME = os.getenv("DB_NAME")
     DB_USERNAME = os.getenv("DB_USERNAME")
-    DB_PASSWORD = os.getenv("DB_PASSWORD")
+    DB_PASSWORD = quote_plus(os.getenv("DB_PASSWORD"))
     AUTH_CODE = os.getenv("AUTH_CODE")
     REDIRECT_URL = os.getenv("REDIRECT_URL")
     CLIENT_ID = os.getenv("CLIENT_ID")
