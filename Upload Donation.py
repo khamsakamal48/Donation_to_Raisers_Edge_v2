@@ -668,10 +668,17 @@ def post_request_re(url, params):
     # Convert int64 to int in params
     params = {k: int(v) if isinstance(v, np.int64) else v for k, v in params.items()}
 
-    logging.debug(params)
-
     try:
-        re_api_response = http.post(url, params=params, headers=headers, json=params)
+        # Checking for special character in Params
+        if '&' in str(params):
+            # URL encode the parameters
+            encoded_params = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+
+            re_api_response = http.post(url, params=params, headers=headers, json=encoded_params)
+
+        else:
+            re_api_response = http.post(url, params=params, headers=headers, json=params)
+
         re_api_response.raise_for_status()  # Raises a HTTPError if the status is 4xx, 5xx
 
     except requests.exceptions.HTTPError as http_err:
@@ -685,6 +692,7 @@ def post_request_re(url, params):
     except Exception as e:
         logging.error(f"An error occurred: {e}")
         raise Exception
+
     else:
         return re_api_response.json()
 
