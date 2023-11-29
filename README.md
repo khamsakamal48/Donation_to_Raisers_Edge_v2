@@ -1,16 +1,5 @@
 # Donation_to_Raisers_Edge_v2
 
-## To do
-- Create database
-  - Uploaded IDs
-  - Userbase of Email, PAN and Phone number
-  - Projects
-- Searches:
-  - Let it search the DB first and then call API
-  - Ensure that only result is matched
-  - Else email
-  - Search campaign else create it automatically
-
 ## Pre-requisites
 1. Install below packages
     ``` bash
