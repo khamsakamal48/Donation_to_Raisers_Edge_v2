@@ -60,4 +60,9 @@
         id int
     );
    
+   CREATE TABLE valid_constituents
+    (
+        id int
+    );
+   
    ```
