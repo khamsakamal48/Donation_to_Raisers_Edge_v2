@@ -1008,7 +1008,11 @@ def add_campaign(desc):
         'description': desc[:100]
     }
 
+    # # URL encode the parameters
     params = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+
+    # Convert the encoded parameters string back to a dictionary
+    params = dict(urllib.parse.parse_qsl(params))
 
     response = post_request_re(url, params)
 
