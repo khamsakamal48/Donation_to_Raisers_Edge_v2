@@ -669,14 +669,8 @@ def post_request_re(url, params):
     params = {k: int(v) if isinstance(v, np.int64) else v for k, v in params.items()}
 
     try:
-        # Checking for special character in Params
         if '&' in str(params):
-            # URL encode the parameters
-            encoded_params = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
-            encoded_params_dict = dict(urllib.parse.parse_qsl(encoded_params))
-
-            re_api_response = http.post(url, params=json.dumps(params), headers=headers, json=params)
-
+            re_api_response = http.post(url, headers=headers, json=params)
         else:
             re_api_response = http.post(url, params=params, headers=headers, json=params)
 
