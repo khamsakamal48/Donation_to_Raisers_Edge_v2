@@ -373,7 +373,7 @@ def locate_donor(df):
 
         # Found only one match
         case 1:
-            return const_id.loc[0, 'constituent_id']
+            return const_id.loc[0, 'id']
 
         # Found no match
         case 0:
