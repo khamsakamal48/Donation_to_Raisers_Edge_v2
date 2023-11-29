@@ -14,6 +14,7 @@ import re
 import random
 import string
 import sys
+import urllib.parse
 
 from dotenv import load_dotenv
 from datetime import datetime
@@ -1004,8 +1005,10 @@ def add_campaign(desc):
     url = 'https://api.sky.blackbaud.com/nxt-data-integration/v1/re/campaigns'
     params = {
         'campaign_id': camp_id,
-        'description': quote_plus(desc[:100])
+        'description': desc[:100]
     }
+
+    params = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
 
     response = post_request_re(url, params)
 
