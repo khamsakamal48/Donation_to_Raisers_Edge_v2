@@ -345,7 +345,7 @@ def locate_donor(df):
     phone = df['contactno']
     pan = df['pancard']
 
-    if len(phone) > 3:
+    if len(str(phone)) > 3:
         const_id = pd.read_sql_query(
             f'''
             SELECT DISTINCT id FROM valid_constituents
