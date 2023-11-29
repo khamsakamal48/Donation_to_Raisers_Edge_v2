@@ -14,7 +14,7 @@ import re
 import random
 import string
 import sys
-import urllib.parse
+import urllib.request
 
 from dotenv import load_dotenv
 from datetime import datetime
@@ -1003,19 +1003,33 @@ def add_campaign(desc):
 
     camp_id = camp_id.loc[0, 'max'] + 1
 
-    url = 'https://api.sky.blackbaud.com/nxt-data-integration/v1/re/campaigns'
-    params = {
-        'campaign_id': camp_id,
-        'description': desc.replace('&', 'and')[:100]
-    }
+    try:
+        url = "https://api.sky.blackbaud.com/nxt-data-integration/v1/re/campaigns"
 
-    # # URL encode the parameters
-    params = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+        hdr = {
+            'Bb-Api-Subscription-Key': RE_API_KEY,
+            'Authorization': 'Bearer ' + retrieve_token(),
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache'
+        }
 
-    # Convert the encoded parameters string back to a dictionary
-    params = dict(urllib.parse.parse_qsl(params))
+        # Request body
+        data = {
+            'campaign_id': camp_id,
+            'description': desc[:100]
+        }
+        data = json.dumps(data)
+        req = urllib.request.Request(url, headers=hdr, data=bytes(data.encode("utf-8")))
 
-    response = post_request_re(url, params)
+        req.get_method = lambda: 'POST'
+        response = urllib.request.urlopen(req)
+        logging.info(response.getcode())
+        logging.info(response.read())
+        response = response.json()
+
+    except Exception as e:
+        logging.error(e)
+        raise Exception
 
     # Adding the new value to Database
     db_conn.execute(text(f"INSERT INTO campaign_list VALUES ('{camp_id}', '{desc}', '{response['id']}');"))
