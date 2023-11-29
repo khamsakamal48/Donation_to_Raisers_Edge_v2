@@ -1004,7 +1004,7 @@ def add_campaign(desc):
     url = 'https://api.sky.blackbaud.com/nxt-data-integration/v1/re/campaigns'
     params = {
         'campaign_id': camp_id,
-        'description': desc[:100]
+        'description': quote_plus(desc[:100])
     }
 
     response = post_request_re(url, params)
