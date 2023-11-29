@@ -347,7 +347,9 @@ def get_emails():
     pagination_api_request(url, {})
 
     email_df = load_from_JSON_to_DB()
-    email_df = email_df[['constituent_id', 'address']].copy()
+    email_df = email_df[
+        email_df['is_constituent'] is True
+    ][['constituent_id', 'address']].copy()
 
     load_to_db(email_df, 'constituent_list')
 
@@ -373,7 +375,9 @@ def get_phones():
     pagination_api_request(url, {})
 
     phone_df = load_from_JSON_to_DB()
-    phone_df = phone_df[['constituent_id', 'number']].copy()
+    phone_df = phone_df[
+        phone_df['is_constituent'] is True
+    ][['constituent_id', 'number']].copy()
 
     load_to_db(phone_df, 'constituent_list')
 
