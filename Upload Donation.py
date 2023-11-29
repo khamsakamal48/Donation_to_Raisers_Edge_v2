@@ -346,18 +346,24 @@ def locate_donor(df):
 
     if len(phone) > 3:
         const_id = pd.read_sql_query(
-            f'''SELECT DISTINCT constituent_id
-            FROM constituent_list
-            WHERE LOWER(details) IN (LOWER('{email}'), '{phone}');
+            f'''
+            SELECT DISTINCT id FROM valid_constituents
+            WHERE id IN (
+                SELECT DISTINCT constituent_id FROM constituent_list
+                WHERE LOWER(details) IN (LOWER('{email}'), '{phone}')
+                );
             ''',
             db_conn
         )
 
     else:
         const_id = pd.read_sql_query(
-            f'''SELECT DISTINCT constituent_id
-            FROM constituent_list
-            WHERE LOWER(details) IN (LOWER('{email}'));
+            f'''
+            SELECT DISTINCT id FROM valid_constituents
+            WHERE id IN (
+                SELECT DISTINCT constituent_id FROM constituent_list
+                WHERE LOWER(details) IN (LOWER('{email}'))
+                );
             ''',
             db_conn
         )
@@ -451,7 +457,8 @@ def found_multiple_matches(df):
                         'ContentType': 'HTML',
                         'Content': email_body
                     },
-                    'ToRecipients': get_recipients(SEND_TO)
+                    'ToRecipients': get_recipients(SEND_TO),
+                    'CcRecipients': get_recipients(CC_TO),
                 },
                 'SaveToSentItems': 'true'
             }
@@ -626,7 +633,8 @@ def inform_abt_new_record(const_id, df):
                         'ContentType': 'HTML',
                         'Content': email_body
                     },
-                    'ToRecipients': get_recipients(SEND_TO)
+                    'ToRecipients': get_recipients(SEND_TO),
+                    'CcRecipients': get_recipients(CC_TO),
                 },
                 'SaveToSentItems': 'true'
             }
@@ -1135,7 +1143,8 @@ def check_names(df, const_id):
                             'ContentType': 'HTML',
                             'Content': email_body
                         },
-                        'ToRecipients': get_recipients(SEND_TO)
+                        'ToRecipients': get_recipients(SEND_TO),
+                        'CcRecipients': get_recipients(CC_TO),
                     },
                     'SaveToSentItems': 'true'
                 }
@@ -1393,7 +1402,8 @@ def send_mail_different_education(re_data, each_row, subject, const_id):
                         'ContentType': 'HTML',
                         'Content': email_body
                     },
-                    'ToRecipients': get_recipients(SEND_TO)
+                    'ToRecipients': get_recipients(SEND_TO),
+                    'CcRecipients': get_recipients(CC_TO),
                 },
                 'SaveToSentItems': 'true'
             }
