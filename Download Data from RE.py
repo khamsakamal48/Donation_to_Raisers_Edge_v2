@@ -356,11 +356,11 @@ def get_emails():
 def load_to_db(df, table):
     logging.info('Loading to Database')
 
-    if table == 'campaign_list':
+    if table in ['campaign_list', 'valid_constituents']:
         # Truncate Table
         truncate_table(table)
 
-    if table != 'campaign_list':
+    else:
         # Renaming column name
         df.rename(columns={df.columns[-1]: 'details'}, inplace=True)
 
@@ -451,6 +451,7 @@ except Exception as Argument:
     logging.error(Argument)
 
     send_error_emails('Error while downloading data | Donation to Raisers Edge', Argument)
+
 
 finally:
 
