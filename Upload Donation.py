@@ -665,13 +665,17 @@ def post_request_re(url, params):
         'Cache-Control': 'no-cache'
     }
 
-    # Convert int64 to int in params
-    params = {k: int(v) if isinstance(v, np.int64) else v for k, v in params.items()}
+    # # Convert int64 to int in params
+    # params = {k: int(v) if isinstance(v, np.int64) else v for k, v in params.items()}
 
     try:
         if '&' in str(params):
+            # Convert int64 to int in params
+            params = {k: quote_plus(str(v)) if isinstance(v, str) else int(v) if isinstance(v, np.int64) else v for k, v in params.items()}
             re_api_response = http.post(url, headers=headers, json=params)
         else:
+            # Convert int64 to int in params
+            params = {k: int(v) if isinstance(v, np.int64) else v for k, v in params.items()}
             re_api_response = http.post(url, params=params, headers=headers, json=params)
 
         re_api_response.raise_for_status()  # Raises a HTTPError if the status is 4xx, 5xx
