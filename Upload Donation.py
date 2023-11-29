@@ -14,7 +14,6 @@ import re
 import random
 import string
 import sys
-import urllib.request
 
 from dotenv import load_dotenv
 from datetime import datetime
@@ -1003,33 +1002,14 @@ def add_campaign(desc):
 
     camp_id = camp_id.loc[0, 'max'] + 1
 
-    try:
-        url = "https://api.sky.blackbaud.com/nxt-data-integration/v1/re/campaigns"
+    url = 'https://api.sky.blackbaud.com/nxt-data-integration/v1/re/campaigns'
 
-        hdr = {
-            'Bb-Api-Subscription-Key': RE_API_KEY,
-            'Authorization': 'Bearer ' + retrieve_token(),
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache'
-        }
+    params = {
+        'campaign_id': camp_id,
+        'description': desc[:100]
+    }
 
-        # Request body
-        data = {
-            'campaign_id': camp_id,
-            'description': desc[:100]
-        }
-        data = json.dumps(data)
-        req = urllib.request.Request(url, headers=hdr, data=bytes(data.encode("utf-8")))
-
-        req.get_method = lambda: 'POST'
-        response = urllib.request.urlopen(req)
-        logging.info(response.getcode())
-        logging.info(response.read())
-        response = response.json()
-
-    except Exception as e:
-        logging.error(e)
-        raise Exception
+    response = post_request_re(url, params)
 
     # Adding the new value to Database
     db_conn.execute(text(f"INSERT INTO campaign_list VALUES ('{camp_id}', '{desc}', '{response['id']}');"))
