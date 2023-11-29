@@ -675,7 +675,7 @@ def post_request_re(url, params):
             encoded_params = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
             encoded_params_dict = dict(urllib.parse.parse_qsl(encoded_params))
 
-            re_api_response = http.post(url, data=encoded_params_dict, headers=headers, json=params)
+            re_api_response = http.post(url, params=encoded_params_dict, headers=headers, json=params)
 
         else:
             re_api_response = http.post(url, params=params, headers=headers, json=params)
