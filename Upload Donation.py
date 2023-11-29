@@ -344,13 +344,23 @@ def locate_donor(df):
     phone = df['contactno']
     pan = df['pancard']
 
-    const_id = pd.read_sql_query(
-        f'''SELECT DISTINCT constituent_id
-        FROM constituent_list
-        WHERE LOWER(details) IN (LOWER('{email}'), '{phone}');
-        ''',
-        db_conn
-    )
+    if len(phone) > 3:
+        const_id = pd.read_sql_query(
+            f'''SELECT DISTINCT constituent_id
+            FROM constituent_list
+            WHERE LOWER(details) IN (LOWER('{email}'), '{phone}');
+            ''',
+            db_conn
+        )
+
+    else:
+        const_id = pd.read_sql_query(
+            f'''SELECT DISTINCT constituent_id
+            FROM constituent_list
+            WHERE LOWER(details) IN (LOWER('{email}'));
+            ''',
+            db_conn
+        )
 
     # Case-Match statement to get RE ID
     match const_id.shape[0]:
