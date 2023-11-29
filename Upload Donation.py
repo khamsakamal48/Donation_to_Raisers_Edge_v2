@@ -670,9 +670,7 @@ def post_request_re(url, params):
 
     try:
         if '&' in str(params):
-            # Quote_plus for encoding special characters in URL
-            encoded_params = {k: quote_plus(str(v)) for k, v in params.items()}
-            re_api_response = http.post(url, headers=headers, json=encoded_params)
+            re_api_response = http.post(url, headers=headers, json=params)
         else:
             # Convert int64 to int in params
             re_api_response = http.post(url, params=params, headers=headers, json=params)
