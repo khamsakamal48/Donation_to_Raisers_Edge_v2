@@ -1101,7 +1101,7 @@ def check_names(df, const_id):
             template = """
                     <p>Hi,</p>
                     <p>This is to inform you that the name provided by Alum is different than that exists in Raisers Edge.</p>
-                    <p>The new one has been updated in Raisers Edge, and the Existing name is stored as &#39;<u>Former Name</u>&#39; in RE.</p>
+                    <p>The new one has not been updated in Raisers Edge. You can manually review and update the same.</p>
                     <p><a href="https://host.nxt.blackbaud.com/constituent/records/{constituent_id}?envId=p-dzY8gGigKUidokeljxaQiA&amp;svcId=renxt" target="_blank"><strong>Open in RE</strong></a></p>
                     <table align="left" border="1" cellpadding="1" cellspacing="1" style="width:500px">
                         <thead>
