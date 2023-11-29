@@ -47,7 +47,7 @@ def get_env_variables():
 
     global REMOTE_SERVER_IP, REMOTE_SERVER_USER, REMOTE_SERVER_PASS, O_CLIENT_ID, \
         CLIENT_SECRET, TENANT_ID, FROM, SEND_TO, CC_TO, ERROR_EMAILS_TO, DB_IP, DB_NAME, \
-        DB_USERNAME, DB_PASSWORD, AUTH_CODE, REDIRECT_URL, CLIENT_ID, RE_API_KEY
+        DB_USERNAME, DB_PASSWORD, AUTH_CODE, REDIRECT_URL, CLIENT_ID, RE_API_KEY, CONSTITUENT_LIST
 
     load_dotenv()
 
@@ -69,6 +69,7 @@ def get_env_variables():
     REDIRECT_URL = os.getenv("REDIRECT_URL")
     CLIENT_ID = os.getenv("CLIENT_ID")
     RE_API_KEY = os.getenv("RE_API_KEY")
+    CONSTITUENT_LIST = os.getenv("CONSTITUENT_LIST")
 
 
 def send_error_emails(subject, Argument):
@@ -347,9 +348,7 @@ def get_emails():
     pagination_api_request(url, {})
 
     email_df = load_from_JSON_to_DB()
-    email_df = email_df[
-        email_df['is_constituent'] is True
-    ][['constituent_id', 'address']].copy()
+    email_df = email_df[['constituent_id', 'address']].copy()
 
     load_to_db(email_df, 'constituent_list')
 
@@ -375,9 +374,7 @@ def get_phones():
     pagination_api_request(url, {})
 
     phone_df = load_from_JSON_to_DB()
-    phone_df = phone_df[
-        phone_df['is_constituent'] is True
-    ][['constituent_id', 'number']].copy()
+    phone_df = phone_df[['constituent_id', 'number']].copy()
 
     load_to_db(phone_df, 'constituent_list')
 
@@ -400,6 +397,19 @@ def get_campaign_list():
     campaign_df = campaign_df[['campaign_id', 'description', 'id']].copy()
 
     load_to_db(campaign_df, 'campaign_list')
+
+
+def get_constituents():
+    logging.info('Downloading constituents from Raisers Edge')
+
+    # Get Constituent list
+    url = f'https://api.sky.blackbaud.com/constituent/v1/constituents?list_id={CONSTITUENT_LIST}&fields=id&limit=5000'
+    params = {}
+    pagination_api_request(url, params)
+
+    constituent_df = load_from_JSON_to_DB()
+
+    load_to_db(constituent_df, 'valid_constituents')
 
 
 try:
@@ -432,6 +442,10 @@ try:
 
     # Get Campaign List
     get_campaign_list()
+
+    # Get Valid constituents
+    get_constituents()
+
 
 except Exception as Argument:
     logging.error(Argument)
