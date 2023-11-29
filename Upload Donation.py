@@ -783,11 +783,13 @@ def load_token():
 
 
 def search_constituent(email, phone, pan):
+    logging.info('Searching constituent in Raisers Edge')
+
     i = 0
     params = {}
 
     # Formatting phone
-    phone = ''.join([x for x in phone if x.isdigit()])
+    phone = ''.join([x for x in str(phone) if x.isdigit()])
     phone = phone if len(phone) > 6 else np.NaN
 
     for search_text in [email, pan, phone]:
