@@ -669,12 +669,7 @@ def post_request_re(url, params):
     params = {k: int(v) if isinstance(v, np.int64) else v for k, v in params.items()}
 
     try:
-        if '&' in str(params):
-            re_api_response = http.post(url, headers=headers, json=params)
-        else:
-            # Convert int64 to int in params
-            re_api_response = http.post(url, params=params, headers=headers, json=params)
-
+        re_api_response = http.post(url, params=params, headers=headers, json=params)
         re_api_response.raise_for_status()  # Raises a HTTPError if the status is 4xx, 5xx
 
     except requests.exceptions.HTTPError as http_err:
@@ -1009,7 +1004,7 @@ def add_campaign(desc):
     url = 'https://api.sky.blackbaud.com/nxt-data-integration/v1/re/campaigns'
     params = {
         'campaign_id': camp_id,
-        'description': desc[:100]
+        'description': desc.replace('&', 'and')[:100]
     }
 
     # # URL encode the parameters
