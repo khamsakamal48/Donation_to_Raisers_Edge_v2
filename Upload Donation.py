@@ -946,8 +946,12 @@ def upload_donation(df, const_id):
         ]
     }
 
+    logging.debug(params)
+
     logging.info('Proceeding to upload donations')
     params = delete_empty_keys(params)
+
+    logging.debug(params)
 
     url = 'https://api.sky.blackbaud.com/gift/v1/gifts'
 
