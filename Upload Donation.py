@@ -1190,7 +1190,7 @@ def update_phones(df, const_id):
             phones_in_re = re_data['number'].to_list()
 
             # Adding last 10 characters of phone to the list as well
-            counter = len(phones_in_re)
+            counter = len(str(phones_in_re))
             i = 0
 
             for p in phones_in_re:
@@ -1617,7 +1617,7 @@ def add_county(county):
             # Concatenate the unique number and the suffix character
             short_description = str(unique_num % 1000) + suffix_char
 
-            if len(short_description) > 3:
+            if len(len(short_description)) > 3:
                 short_description = short_description[1:]
 
         else:
