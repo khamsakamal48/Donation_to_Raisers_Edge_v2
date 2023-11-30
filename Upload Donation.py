@@ -1336,10 +1336,10 @@ def update_education(df, const_id):
                 'campus': department[:50],
                 'class_of': class_of,
                 'date_graduated': {
-                    'y': '' if pd.isnull(class_of) else int(class_of)
+                    'y': '' if str(class_of).isdigit() else int(class_of)
                 },
                 'date_left': {
-                    'y': '' if pd.isnull(class_of) else int(class_of)
+                    'y': '' if str(class_of).isdigit() else int(class_of)
                 },
                 'majors': [
                     department[:50]
