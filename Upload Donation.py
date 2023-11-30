@@ -1652,7 +1652,7 @@ def update_email(email, const_id):
         # Let's check if it's primary
         if not [True for x in api_response['value'] if
                 (x['address'] == email.lower() and (x['primary'] == True or x['primary'] == 'True'))]:
-            email_address_id = int([x['id'] for x in api_response['value'] if x['address'] == email.lower()][0])
+            email_address_id = int([x['id'] for x in api_response['value'] if x['address'].lower() == email.lower()][0])
 
             # Email address exists, but is not primary
             url = f'https://api.sky.blackbaud.com/constituent/v1/emailaddresses/{email_address_id}'
