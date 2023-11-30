@@ -14,7 +14,6 @@ import re
 import random
 import string
 import sys
-import urllib.parse
 
 from dotenv import load_dotenv
 from datetime import datetime
@@ -1004,16 +1003,11 @@ def add_campaign(desc):
     camp_id = camp_id.loc[0, 'max'] + 1
 
     url = 'https://api.sky.blackbaud.com/nxt-data-integration/v1/re/campaigns'
+
     params = {
         'campaign_id': camp_id,
-        'description': desc.replace('&', 'and')[:100]
+        'description': desc[:100]
     }
-
-    # # URL encode the parameters
-    params = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
-
-    # Convert the encoded parameters string back to a dictionary
-    params = dict(urllib.parse.parse_qsl(params))
 
     response = post_request_re(url, params)
 
