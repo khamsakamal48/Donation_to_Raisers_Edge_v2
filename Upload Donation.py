@@ -805,7 +805,7 @@ def search_constituent(email, phone, pan):
             response = get_request_re(url, params)
 
             if response['count'] != 0:
-                return set(int(x['id']) for x in response['value'][:])
+                return set(int(x['id']) for x in response['value'][:] if x['lookup_id'])
 
         i += 1
 
