@@ -1428,97 +1428,110 @@ def update_address(df, const_id):
     logging.info('Proceeding to update address')
 
     new_address = str(df['address1']) + ' ' + str(df['address2']) + ' ' + str(df['city']) + ' ' + str(df['state']) + ' ' + str(df['country']) + ' ' + str(df['zipcode'])
-    logging.debug(new_address)
+
     new_address = new_address.replace(';', ' ').replace('\r\n', ' ').replace('\t', ' ').replace('\n', ' ').replace(
         'nan', ' ').replace('  ', ' ').strip()
-    logging.debug(new_address)
 
-    # Get addresses present in RE
-    url = f'https://api.sky.blackbaud.com/constituent/v1/constituents/{const_id}/addresses'
-    params = {}
+    # Checking if there's any address to add
+    if new_address:
+        # Get addresses present in RE
+        url = f'https://api.sky.blackbaud.com/constituent/v1/constituents/{const_id}/addresses'
+        params = {}
 
-    # API request
-    api_response = get_request_re(url, params)
+        # API request
+        api_response = get_request_re(url, params)
 
-    # Load to dataframe
-    address_df = pd.json_normalize(api_response['value'])
+        # Load to dataframe
+        address_df = pd.json_normalize(api_response['value'])
 
-    # address_df['address'] = address_df[['address_lines', 'city', 'state', 'county', 'country', 'postal_code']].astype(
-    #     str).apply(' '.join, axis=1)
-    address_df['address'] = address_df['formatted_address'].apply(
-        lambda x: str(x).replace('\r\n', ' ').replace('\t', ' ').replace('\n', ' ').replace('nan', ' ').replace('  ', ' ').strip())
+        # address_df['address'] = address_df[['address_lines', 'city', 'state', 'county', 'country', 'postal_code']].astype(
+        #     str).apply(' '.join, axis=1)
+        address_df['address'] = address_df['formatted_address'].apply(
+            lambda x: str(x).replace('\r\n', ' ').replace('\t', ' ').replace('\n', ' ').replace('nan', ' ').replace('  ', ' ').strip())
 
-    # Drop blank addresses
-    re_address_list = address_df['address'].dropna().to_list()
+        # Drop blank addresses
+        re_address_list = address_df['address'].dropna().to_list()
 
-    # Check if address exists
-    if process.extractOne(new_address, re_address_list)[1] >= 95:
-        # New address exists in RE, will check if it's primary
+        # Check if address exists
+        if process.extractOne(new_address, re_address_list)[1] >= 95:
+            # New address exists in RE, will check if it's primary
 
-        # First let's identify the index
-        address_id = int(
-            address_df.loc[
-                re_address_list.index(process.extractOne(new_address, re_address_list)[0]),
-                ['id']
-            ]['id']
-        )
+            # First let's identify the index
+            address_id = int(
+                address_df.loc[
+                    re_address_list.index(process.extractOne(new_address, re_address_list)[0]),
+                    ['id']
+                ]['id']
+            )
 
-        url = f'https://api.sky.blackbaud.com/constituent/v1/addresses/{address_id}'
+            url = f'https://api.sky.blackbaud.com/constituent/v1/addresses/{address_id}'
 
-        params = {
-            'preferred': True
-        }
+            params = {
+                'preferred': True
+            }
 
-        patch_request_re(url, params)
+            patch_request_re(url, params)
 
-        # Update Sync tags
-        add_tags('Sync source', 'Donation', new_address[:50], const_id)
+            # Update Sync tags
+            add_tags('Sync source', 'Donation', new_address[:50], const_id)
 
-        # Update Verified Tags
-        add_tags('Verified Location', new_address[:50], 'Donation', const_id)
+            # Update Verified Tags
+            add_tags('Verified Location', new_address[:50], 'Donation', const_id)
 
-    else:
-        # New address doesn't exist in RE
-        logging.info('Initialize Nominatim API for Geocoding')
+        else:
+            # New address doesn't exist in RE
+            logging.info('Initialize Nominatim API for Geocoding')
 
-        # initialize Nominatim API
-        geolocator = Nominatim(user_agent="geoapiExercises")
+            # initialize Nominatim API
+            geolocator = Nominatim(user_agent="geoapiExercises")
 
-        # adding 1 second padding between calls
-        geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1, return_value_on_exception=None)
+            # adding 1 second padding between calls
+            geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1, return_value_on_exception=None)
 
-        logging.info('Proceeding to update location')
+            logging.info('Proceeding to update location')
 
-        address_lines = ' ' if pd.isnull(df['address1']) else str(df['address1']) + ' ' + ' ' if pd.isnull(df['address2']) else str(df['address2'])
-        city = ' ' if pd.isnull(df['city']) else str(df['city'])
-        state = ' ' if pd.isnull(df['state']) else str(df['state'])
-        country = ' ' if pd.isnull(df['country']) else str(df['country'])
+            address_lines = ' ' if pd.isnull(df['address1']) else str(df['address1']) + ' ' + ' ' if pd.isnull(df['address2']) else str(df['address2'])
+            city = ' ' if pd.isnull(df['city']) else str(df['city'])
+            state = ' ' if pd.isnull(df['state']) else str(df['state'])
+            country = ' ' if pd.isnull(df['country']) else str(df['country'])
 
-        # Remove non-alphabetic characters
-        city = re.sub('[^a-zA-Z ]+', '', city)
-        state = re.sub('[^a-zA-Z ]+', '', state)
-        country = re.sub('[^a-zA-Z ]+', '', country)
+            # Remove non-alphabetic characters
+            city = re.sub('[^a-zA-Z ]+', '', city)
+            state = re.sub('[^a-zA-Z ]+', '', state)
+            country = re.sub('[^a-zA-Z ]+', '', country)
 
-        if country != '' or ~(country == 'India' and city == '' and state == ''):
-            address = str(address_lines) + ', ' + str(city) + ', ' + str(state) + ', ' + str(country)
+            if country != '' or ~(country == 'India' and city == '' and state == ''):
+                address = str(address_lines) + ', ' + str(city) + ', ' + str(state) + ', ' + str(country)
 
-            address = address.replace('nan', '').strip().replace(', ,', ', ')
+                address = address.replace('nan', '').strip().replace(', ,', ', ')
 
-            location = geolocator.geocode(address, addressdetails=True, language='en')
+                location = geolocator.geocode(address, addressdetails=True, language='en')
 
-            while not location:
-                print('I am here')
+                while not location:
 
-                address_split = address[address.index(' ') + 1:]
-                address = address_split
+                    address_split = address[address.index(' ') + 1:]
+                    address = address_split
 
-                location = geolocator.geocode(address_split, addressdetails=True, language='en')
+                    location = geolocator.geocode(address_split, addressdetails=True, language='en')
 
-            address = location.raw['address']
+                address = location.raw['address']
 
-            try:
-                city = address.get('city', '')
-                if city == '':
+                try:
+                    city = address.get('city', '')
+                    if city == '':
+                        try:
+                            city = address.get('state_district', '')
+                            if city == '':
+                                try:
+                                    city = address.get('county', '')
+                                except:
+                                    city = ''
+                        except:
+                            try:
+                                city = address.get('county', '')
+                            except:
+                                city = ''
+                except:
                     try:
                         city = address.get('state_district', '')
                         if city == '':
@@ -1531,57 +1544,33 @@ def update_address(df, const_id):
                             city = address.get('county', '')
                         except:
                             city = ''
-            except:
+
+                state = address.get('state', '')
+                country = address.get('country', '')
+
+                url = 'https://api.sky.blackbaud.com/constituent/v1/addresses'
+
+                # Ignore state for below countries
+                if country == 'Mauritius' or country == 'Switzerland' or country == 'France' or country == 'Bahrain':
+                    state = ''
+
+                params = {
+                    'address_lines': new_address.replace('  ', ' ').strip(),
+                    'city': city,
+                    'state': state,
+                    'county': state,
+                    'country': country,
+                    'postal_code': '' if pd.isnull(df['zipcode']) else int(df['zipcode']) if str(df['zipcode']).isdigit() else df['zipcode'],
+                    'constituent_id': const_id,
+                    'type': 'Home',
+                    'preferred': True
+                }
+
+                # Delete blank values from JSON
+                params = delete_empty_keys(params)
+
                 try:
-                    city = address.get('state_district', '')
-                    if city == '':
-                        try:
-                            city = address.get('county', '')
-                        except:
-                            city = ''
-                except:
-                    try:
-                        city = address.get('county', '')
-                    except:
-                        city = ''
-
-            state = address.get('state', '')
-            country = address.get('country', '')
-
-            url = 'https://api.sky.blackbaud.com/constituent/v1/addresses'
-
-            # Ignore state for below countries
-            if country == 'Mauritius' or country == 'Switzerland' or country == 'France' or country == 'Bahrain':
-                state = ''
-
-            params = {
-                'address_lines': new_address.replace('  ', ' ').strip(),
-                'city': city,
-                'state': state,
-                'county': state,
-                'country': country,
-                'postal_code': '' if pd.isnull(df['zipcode']) else int(df['zipcode']) if str(df['zipcode']).isdigit() else df['zipcode'],
-                'constituent_id': const_id,
-                'type': 'Home',
-                'preferred': True
-            }
-
-            # Delete blank values from JSON
-            params = delete_empty_keys(params)
-
-            try:
-                api_response = post_request_re(url, params)
-
-                # Update Sync tags
-                add_tags('Sync source', 'Donation', new_address[:50], const_id)
-
-                # Update Verified Tags
-                add_tags('Verified Location', new_address[:50], 'Donation', const_id)
-
-            except:
-                if 'county of value' in str(api_response).lower():
-                    add_county(state)
-                    post_request_re(url, params)
+                    api_response = post_request_re(url, params)
 
                     # Update Sync tags
                     add_tags('Sync source', 'Donation', new_address[:50], const_id)
@@ -1589,8 +1578,19 @@ def update_address(df, const_id):
                     # Update Verified Tags
                     add_tags('Verified Location', new_address[:50], 'Donation', const_id)
 
-                else:
-                    raise Exception(f'API returned an error: {api_response}')
+                except:
+                    if 'county of value' in str(api_response).lower():
+                        add_county(state)
+                        post_request_re(url, params)
+
+                        # Update Sync tags
+                        add_tags('Sync source', 'Donation', new_address[:50], const_id)
+
+                        # Update Verified Tags
+                        add_tags('Verified Location', new_address[:50], 'Donation', const_id)
+
+                    else:
+                        raise Exception(f'API returned an error: {api_response}')
 
 
 def add_county(county):
