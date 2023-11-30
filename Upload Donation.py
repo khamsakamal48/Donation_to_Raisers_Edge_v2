@@ -815,6 +815,8 @@ def search_constituent(email, phone, pan):
 def upload_donation(df, const_id):
     logging.info(f"Uploading donation for RE ID: {const_id} and Donation Portal Ref. No.: {df['dtlDonor_id']}")
 
+    logging.debug(df)
+
     # Search Campaign
     camp_id = get_campaign(df['project'])
 
@@ -944,6 +946,8 @@ def upload_donation(df, const_id):
             }
         ]
     }
+
+    logging.debug(params)
 
     logging.info('Proceeding to upload donations')
     params = delete_empty_keys(params)
