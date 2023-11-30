@@ -852,7 +852,7 @@ def upload_donation(df, const_id):
     params = {
         'acknowledgements': [
             {
-                'date': '' if pd.isnull(receipt_date) or pd.isna(receipt_date) else str(receipt_date),
+                'date': '' if pd.isna(receipt_date) else receipt_date,
                 'status': 'ACKNOWLEDGED',
                 'letter': 'General Thank You'
             }
