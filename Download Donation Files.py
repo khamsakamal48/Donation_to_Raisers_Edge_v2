@@ -205,11 +205,11 @@ def download_files(remote_path, local_path):
     # DOWNLOAD ALL FILES IN FOLDER
     files = sftp.listdir(remote_path)
     for file in files:
-        sftp.get(os.path.join(remote_path, file), os.path.join(local_path, file))
+        sftp.get(os.path.join(remote_path, file), os.path.join(local_path, file.replace('\\\\', '/')))
 
         # Removing files
         logging.info(f'Removing files from {remote_path}')
-        # sftp.remove(os.path.join(remote_path, file))
+        sftp.remove(os.path.join(remote_path, file))
 
 
 def close_connection():
@@ -235,13 +235,13 @@ try:
     connect_server()
 
     # Download Donation files
-    download_files('F:/FTPServer/Kamal/Donation/', 'Donation')
+    download_files('/F:/FTPServer/Kamal/Donation/', 'Files/Donation')
 
     # Download Receipts
-    download_files('F:/FTPServer/Kamal/Receipt/', 'Receipts')
+    download_files('/F:/FTPServer/Kamal/Receipt/', 'Files/Receipts')
 
     # Download Thank You Letters
-    download_files('F:/FTPServer/Kamal/ThankyouLetter/', 'Thank You Letters')
+    download_files('/F:/FTPServer/Kamal/ThankyouLetter/', 'Files/Thank You Letters')
 
 
 except Exception as Argument:
