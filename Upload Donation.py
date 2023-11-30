@@ -946,12 +946,8 @@ def upload_donation(df, const_id):
         ]
     }
 
-    logging.debug(params)
-
     logging.info('Proceeding to upload donations')
     params = delete_empty_keys(params)
-
-    logging.debug(params)
 
     url = 'https://api.sky.blackbaud.com/gift/v1/gifts'
 
@@ -1341,10 +1337,10 @@ def update_education(df, const_id):
                 'campus': department[:50],
                 'class_of': class_of,
                 'date_graduated': {
-                    'y': '' if str(class_of).isdigit() else int(class_of)
+                    'y': int(class_of) if str(class_of).isdigit() else ''
                 },
                 'date_left': {
-                    'y': '' if str(class_of).isdigit() else int(class_of)
+                    'y': int(class_of) if str(class_of).isdigit() else ''
                 },
                 'majors': [
                     department[:50]
