@@ -205,7 +205,7 @@ def download_files(remote_path, local_path):
     # DOWNLOAD ALL FILES IN FOLDER
     files = sftp.listdir(remote_path)
     for file in files:
-        sftp.get(os.path.join(remote_path, file), os.path.join(local_path, file.replace('\\\\', '/')))
+        sftp.get(os.path.join(remote_path, file), os.path.join(local_path, file))
 
         # Removing files
         logging.info(f'Removing files from {remote_path}')
