@@ -1336,10 +1336,10 @@ def update_education(df, const_id):
                 'campus': department[:50],
                 'class_of': class_of,
                 'date_graduated': {
-                    'y': int(class_of)
+                    'y': '' if pd.isnull(class_of) else int(class_of)
                 },
                 'date_left': {
-                    'y': int(class_of)
+                    'y': '' if pd.isnull(class_of) else int(class_of)
                 },
                 'majors': [
                     department[:50]
@@ -1349,6 +1349,9 @@ def update_education(df, const_id):
                 'social_organization': hostel[:50],
                 'constituent_id': const_id
             }
+
+            # Delete blank values from JSON
+            params = delete_empty_keys(params)
 
             post_request_re(url, params)
 
