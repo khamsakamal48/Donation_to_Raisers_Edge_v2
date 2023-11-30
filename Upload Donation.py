@@ -806,7 +806,11 @@ def search_constituent(email, phone, pan):
 
             if response['count'] != 0:
                 # Lookup ID is only present in TRUE constituents
-                return set(int(x['id']) for x in response['value'][:] if x['lookup_id'])
+                if 'lookup_id' in response['value'][:]:
+                    return set(int(x['id']) for x in response['value'][:])
+
+                else:
+                    return {}
 
         i += 1
 
