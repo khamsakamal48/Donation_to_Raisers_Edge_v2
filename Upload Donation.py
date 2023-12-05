@@ -891,7 +891,7 @@ def upload_donation(df, const_id):
         }],
         'receipts': [{
             'amount': {
-                'value': 0 if df['totalamount'] < 0 else df['totalamount']
+                'value': 0 if df['totalamount'] < 0 else df['donationamount'] if pd.isnull(df['totalamount']) else df['totalamount']
             },
             'date': '' if receipt_date == 'NaT' or pd.isna(receipt_date) else receipt_date,
             'status': '' if receipt_date == 'NaT' or pd.isna(receipt_date) else 'RECEIPTED'
