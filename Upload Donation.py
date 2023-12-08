@@ -487,7 +487,8 @@ def create_constituent(df):
     company_name = df['companyname']
     name = df['name']
 
-    if pd.isnull(company_name) or affiliation != 'Foundation' or affiliation != 'Corporate Non CSR':
+    # if pd.isnull(company_name) or affiliation != 'Foundation' or affiliation != 'Corporate Non CSR':
+    if 'Corporate' not in affiliation or affiliation != 'Foundation':
         # Individual
         name = name.replace('\r\n', ' ').replace('\t', ' ').replace('\n', ' ').replace('  ', ' ')
 
@@ -540,7 +541,7 @@ def create_constituent(df):
         #Organization
         params = {
             'type': 'Organization',
-            'name': name.replace('\r\n', ' ').replace('\t', ' ').replace('\n', ' ').replace('  ', ' ').strip()[:60]
+            'name': name.replace('\r\n', ' ').replace('\t', ' ').replace('\n', ' ').replace('  ', ' ').strip()[:60] if pd.isnull(company_name) or pd.isna(company_name) or company_name == '' else company_name.replace('\r\n', ' ').replace('\t', ' ').replace('\n', ' ').replace('  ', ' ').strip()[:60]
         }
 
         constituent_code = 'Trust/Foundation' if affiliation == 'Foundation' else 'Business/Corporation'
