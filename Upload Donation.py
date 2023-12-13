@@ -1230,12 +1230,6 @@ def update_phones(df, const_id):
 
                 patch_request_re(url, params)
 
-                # Update Sync tags
-                add_tags('Sync source', 'Donation', phone, const_id)
-
-                # Update Verified Tags
-                add_tags('Verified Phone', phone, 'Donation', const_id)
-
             # Else, add in RE
             else:
                 params = {
@@ -1261,6 +1255,12 @@ def update_phones(df, const_id):
             url = 'https://api.sky.blackbaud.com/constituent/v1/phones'
 
             post_request_re(url, params)
+
+        # Update Sync tags
+        add_tags('Sync source', 'Donation', phone, const_id)
+
+        # Update Verified Tags
+        add_tags('Verified Phone', phone, 'Donation', const_id)
 
 
 def update_education(df, const_id):
