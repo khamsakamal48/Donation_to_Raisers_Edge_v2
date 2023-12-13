@@ -980,7 +980,7 @@ def get_campaign(desc):
     logging.info('Identifying the Campaign ID')
 
     # Removing extra spaces (if any)
-    desc = desc.strip()
+    desc = str(desc).strip()
 
     camp_id = pd.read_sql_query(f"""
     SELECT id
