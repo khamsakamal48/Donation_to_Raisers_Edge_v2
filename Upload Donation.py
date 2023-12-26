@@ -487,8 +487,7 @@ def create_constituent(df):
     company_name = df['companyname']
     name = df['name']
 
-    # if pd.isnull(company_name) or affiliation != 'Foundation' or affiliation != 'Corporate Non CSR':
-    if 'Corporate' not in affiliation or affiliation != 'Foundation':
+    if pd.isnull(company_name) and affiliation not in ['Foundation', 'Corporate Non CSR', 'Corporate CSR']:
         # Individual
         name = name.replace('\r\n', ' ').replace('\t', ' ').replace('\n', ' ').replace('  ', ' ')
 
