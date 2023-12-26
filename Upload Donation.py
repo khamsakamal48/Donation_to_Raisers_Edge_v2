@@ -1517,23 +1517,36 @@ def update_address(df, const_id):
 
             if country != '' or ~(country == 'India' and city == '' and state == ''):
                 address = str(address_lines) + ', ' + str(city) + ', ' + str(state) + ', ' + str(country)
-
                 address = address.replace('nan', '').strip().replace(', ,', ', ')
 
-                location = geolocator.geocode(address, addressdetails=True, language='en')
-
-                while not location:
-
-                    address_split = address[address.index(' ') + 1:]
-                    address = address_split
-
-                    location = geolocator.geocode(address_split, addressdetails=True, language='en')
-
-                address = location.raw['address']
-
                 try:
-                    city = address.get('city', '')
-                    if city == '':
+                    location = geolocator.geocode(address, addressdetails=True, language='en')
+
+                    while not location:
+
+                        address_split = address[address.index(' ') + 1:]
+                        address = address_split
+
+                        location = geolocator.geocode(address_split, addressdetails=True, language='en')
+
+                    address = location.raw['address']
+
+                    try:
+                        city = address.get('city', '')
+                        if city == '':
+                            try:
+                                city = address.get('state_district', '')
+                                if city == '':
+                                    try:
+                                        city = address.get('county', '')
+                                    except:
+                                        city = ''
+                            except:
+                                try:
+                                    city = address.get('county', '')
+                                except:
+                                    city = ''
+                    except:
                         try:
                             city = address.get('state_district', '')
                             if city == '':
@@ -1546,27 +1559,17 @@ def update_address(df, const_id):
                                 city = address.get('county', '')
                             except:
                                 city = ''
-                except:
-                    try:
-                        city = address.get('state_district', '')
-                        if city == '':
-                            try:
-                                city = address.get('county', '')
-                            except:
-                                city = ''
-                    except:
-                        try:
-                            city = address.get('county', '')
-                        except:
-                            city = ''
 
-                state = address.get('state', '')
-                country = address.get('country', '')
+                    state = address.get('state', '')
+                    country = address.get('country', '')
+
+                except:
+                    pass
 
                 url = 'https://api.sky.blackbaud.com/constituent/v1/addresses'
 
                 # Ignore state for below countries
-                if country == 'Mauritius' or country == 'Switzerland' or country == 'France' or country == 'Bahrain':
+                if country in ['Mauritius', 'Switzerland', 'France', 'Bahrain', 'Denmark', 'Netherlands']:
                     state = ''
 
                 params = {
