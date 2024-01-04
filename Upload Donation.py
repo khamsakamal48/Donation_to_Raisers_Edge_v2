@@ -1764,6 +1764,12 @@ def is_alphanumeric(s):
     return True
 
 
+def remove_hf(df):
+    logging.info('Removing HF records')
+
+    return df[df['office'] != 'HF'].reset_index(drop=True)
+
+
 try:
     # Start Logging for Debugging
     start_logging()
@@ -1777,11 +1783,14 @@ try:
     # Load Donation Data
     donation_data = load_donation().copy()
 
+    # Connect to DataBase
+    db_conn = connect_db()
+
+    # Remove HF Data
+    donation_data = remove_hf(donation_data)
+
     # Proceeding only if there's any donation data to upload
     if not donation_data.empty:
-
-        # Connect to DataBase
-        db_conn = connect_db()
 
         # Identify missing donations
         logging.info('Identifying pending donations')
