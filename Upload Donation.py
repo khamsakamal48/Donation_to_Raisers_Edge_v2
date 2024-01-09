@@ -930,7 +930,8 @@ def upload_donation(df, const_id):
             {
                 'category': f_currency_type,
                 'value': '' if f_currency_type == '' else df['currencyamount'],
-                'date': '' if f_currency_type == '' else receipt_date
+                'date': '' if f_currency_type == '' else receipt_date,
+                'comment': '' if pd.isnull(df['currencyrate']) else f'Exchange Rate: {df["currencyrate"]}'
             },
             {
                 'category': '' if pd.isnull(df['hfgrant']) else 'Grant No.',
