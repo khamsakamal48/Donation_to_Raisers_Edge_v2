@@ -1767,7 +1767,14 @@ def is_alphanumeric(s):
 def remove_hf(df):
     logging.info('Removing HF records')
 
-    return df[df['office'] != 'HF'].reset_index(drop=True)
+    hf_new = get_from_db('hf_gifts_to_upload').copy()
+
+    df = df[
+        (df['office'] != 'HF') &
+        ~(df['dtlDonor_id'].astype(int).isin(hf_new['dtldonor_id'].astype(int)))
+    ].reset_index(drop=True)
+
+    return df
 
 
 try:
@@ -1787,7 +1794,7 @@ try:
     db_conn = connect_db()
 
     # Remove HF Data
-    donation_data = remove_hf(donation_data)
+    donation_data = remove_hf(donation_data).copy()
 
     # Proceeding only if there's any donation data to upload
     if not donation_data.empty:

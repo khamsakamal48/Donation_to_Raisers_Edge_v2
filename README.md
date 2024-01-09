@@ -54,4 +54,9 @@
         id int
     );
    
+   CREATE TABLE hf_gifts_to_upload
+    (
+        dtlDonor_id int
+    );
+   
    ```
