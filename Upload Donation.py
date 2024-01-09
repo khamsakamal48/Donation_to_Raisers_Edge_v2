@@ -1770,8 +1770,8 @@ def remove_hf(df):
     hf_new = get_from_db('hf_gifts_to_upload').copy()
 
     df = df[
-        (df['office'] != 'HF') &
-        ~(df['dtlDonor_id'].astype(int).isin(hf_new['dtldonor_id'].astype(int)))
+        (df['office'] != 'HF') |
+        (df['dtlDonor_id'].astype(int).isin(hf_new['dtldonor_id'].astype(int)))
     ].reset_index(drop=True)
 
     return df
