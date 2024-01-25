@@ -873,7 +873,7 @@ def upload_donation(df, const_id):
             'campaign_id': int(camp_id),
             'fund_id': 457 if df['office'] == 'HF' else 458
         }],
-        'type': 'Donation',
+        'type': 'GiftInKind' if df['gifttype'] == 'Kind' else 'Donation',
         'payments': [{
             'check_date': {
                 'd': pd.to_datetime(gift_date).strftime('%d') if df['provid'] == 'Cheque' else '',
