@@ -871,7 +871,7 @@ def upload_donation(df, const_id):
                 'value': df['donationamount']
             },
             'campaign_id': int(camp_id),
-            'fund_id': 457 if df['office'] == 'HF' else 458
+            'fund_id': 457 if df['office'] == 'HF' else 468 if df['office'] == 'UK' else 458
         }],
         'type': 'GiftInKind' if df['gifttype'] == 'Kind' else 'Donation',
         'payments': [{
